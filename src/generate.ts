@@ -1,5 +1,5 @@
 import { Bearing } from "./bearing";
-import { BallBearing } from "./bearing-ball";
+import { BallBearing, BallBearingParams } from "./bearing-ball";
 import { Config } from "./config";
 import { makeBinarySTL } from "./stl";
 import { Preview3D } from "./preview3d";
@@ -123,8 +123,8 @@ export function writeConfig(c: Config) {
   }
 }
 
-export function bearingFromConfig(c: Config): Bearing {
-  return new BallBearing({
+export function bearingParamsFor(c: Config): BallBearingParams {
+  return {
     outerDiameter: c.outer,
     boreDiameter: c.bore,
     width: c.width,
@@ -147,7 +147,11 @@ export function bearingFromConfig(c: Config): Bearing {
       covers: c.incCovers,
       balls: c.incBalls,
     },
-  });
+  };
+}
+
+export function bearingFromConfig(c: Config): Bearing {
+  return new BallBearing(bearingParamsFor(c));
 }
 
 export function bearingFromForm(): Bearing {

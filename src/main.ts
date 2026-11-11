@@ -6,6 +6,7 @@ import {
   writeConfig,
 } from "./generate";
 import { BallBearing } from "./bearing-ball";
+import { bearingParamsFor } from "./generate";
 import { configToLink, defaultConfig, parseConfig } from "./config";
 import { decodeQrFromFile, downloadCanvas, printCanvas, renderLabel } from "./codes";
 import "./style.css";
@@ -113,6 +114,16 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
         <td></td>
       </tr>
     </table>
+
+    <details id="size-table-box">
+      <summary>Table of standard sizes (click a row to use it)</summary>
+      <table id="size-table">
+        <thead>
+          <tr><th>Size</th><th>Bore</th><th>Outer Ø</th><th>Width</th><th>Pitch Ø</th><th>Max ball Ø</th><th>Suggested ball</th><th>Balls</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </details>
 
     <h3>Design</h3>
     ${check("cage", "Crown cage (one-piece ball retainer)", d.cage)}
@@ -244,17 +255,53 @@ function refresh() {
   validate();
   generatePreview();
   scheduleLabel();
+  fillSizeTable();
 }
 
-// Choose the largest standard ball that fits the current dimensions
-function suggestBall() {
-  const c = readConfig();
-  const widthLimit = (c.width / 2 - 0.9) * 2 * 0.95;
-  const max = Math.min(BallBearing.maxBallDiameter(c.bore, c.outer, c.clearance), widthLimit);
+// Largest ball (mm) that fits the given dimensions, limited by wall thickness and width
+function maxBallFor(bore: number, outer: number, width: number, clearance: number): number {
+  const widthLimit = (width / 2 - 0.9) * 2 * 0.95;
+  return Math.min(BallBearing.maxBallDiameter(bore, outer, clearance), widthLimit);
+}
+
+// Largest standard ball that fits
+function pickBall(max: number): number {
   let pick = ballSizes[0][1];
   for (const [, dia] of ballSizes) if (dia <= max) pick = dia;
-  ballSelect.value = String(pick);
+  return pick;
 }
+
+function suggestBall() {
+  const c = readConfig();
+  ballSelect.value = String(pickBall(maxBallFor(c.bore, c.outer, c.width, c.clearance)));
+}
+
+// Fill the size table; ball count is the maximum with the current cage setting
+function fillSizeTable() {
+  const c = readConfig();
+  const body = $<HTMLTableSectionElement>("#size-table tbody");
+  const f = (n: number) => String(Math.round(n * 100) / 100);
+  body.innerHTML = standardSizes
+    .map(([name, bore, outer, width]) => {
+      const max = maxBallFor(bore, outer, width, c.clearance);
+      const ball = pickBall(max);
+      const balls = new BallBearing({
+        ...bearingParamsFor(c), boreDiameter: bore, outerDiameter: outer, width, ballDiameter: ball, ballCount: 0,
+      }).maxBalls;
+      const selected = c.bore === bore && c.outer === outer && c.width === width;
+      return `<tr data-size="${name}" style="cursor:pointer${selected ? ";font-weight:bold" : ""}">
+        <td>${name}</td><td>${bore}</td><td>${outer}</td><td>${width}</td>
+        <td>${f((bore + outer) / 2)}</td><td>${max > 0 ? f(max) : "–"}</td>
+        <td>${max >= ballSizes[0][1] ? ball : "–"}</td><td>${max >= ballSizes[0][1] ? balls : "–"}</td></tr>`;
+    })
+    .join("");
+}
+$<HTMLTableSectionElement>("#size-table tbody").addEventListener("click", (e) => {
+  const tr = (e.target as HTMLElement).closest("tr");
+  if (!tr) return;
+  sizeSelect.value = tr.dataset.size!;
+  sizeSelect.dispatchEvent(new Event("change"));
+});
 
 // Make the size picker show a matching standard size, or "Custom"
 function syncSizeSelect() {
