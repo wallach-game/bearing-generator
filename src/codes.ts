@@ -25,8 +25,16 @@ export async function renderLabel(config: Config): Promise<HTMLCanvasElement> {
   ctx.drawImage(qr, pad, pad);
 
   ctx.fillStyle = "#000";
-  ctx.font = "22px sans-serif";
-  lines.forEach((line, i) => ctx.fillText(line, pad, pad + qrSize + 40 + i * lineH));
+  // Shrink each caption line until it fits the QR width
+  lines.forEach((line, i) => {
+    let size = 22;
+    ctx.font = `${size}px sans-serif`;
+    while (size > 10 && ctx.measureText(line).width > qrSize) {
+      size -= 1;
+      ctx.font = `${size}px sans-serif`;
+    }
+    ctx.fillText(line, pad, pad + qrSize + 40 + i * lineH);
+  });
   return canvas;
 }
 
