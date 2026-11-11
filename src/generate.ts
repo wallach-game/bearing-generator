@@ -34,6 +34,13 @@ export function generate() {
 
 // Returns true if the current parameters are valid
 export function validate(): boolean {
+  // An empty or half-typed field gives NaN: wait for a real number
+  const incomplete = Object.values(readConfig()).some((v) => typeof v === "number" && !Number.isFinite(v));
+  if (incomplete) {
+    el("#error").textContent = "Enter a number in every field";
+    el("#summary").textContent = "";
+    return false;
+  }
   const bearing = bearingFromForm();
   try {
     bearing.validate();

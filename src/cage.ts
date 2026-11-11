@@ -5,11 +5,27 @@ import { revolve } from "./revolve";
 import { fromGeometry, toGeometry } from "./meshutil";
 import { Triangle } from "./types";
 
+// The CSG is slow (~0.7 s), so remember recent results by geometry
+const cache = new Map<string, Triangle[]>();
+
 // Crown cage: a thin cylindrical wall at the pitch circle with a solid band
-// below the notches (standing proud of the lower face). A round notch is cut
-// from the top edge for every ball, with a slightly narrower neck above it so
-// the balls snap in. Built in assembled coordinates; the open side faces +Z.
+// under the balls, inside the bearing width. A round notch is cut from the top
+// edge for every ball, with a slightly narrower neck above it so the balls snap
+// in. Built in assembled coordinates; the open side faces +Z.
 export function buildCage(b: BallBearing): Triangle[] {
+  const key = JSON.stringify([
+    b.rp, b.r, b.h, b.half, b.cageWidth, b.cageBottom, b.cageTop,
+    b.cagePocketRadius, b.cageNeck, b.ballCount,
+  ]);
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const result = buildCageUncached(b);
+  cache.set(key, result);
+  if (cache.size > 6) cache.delete(cache.keys().next().value as string);
+  return result;
+}
+
+function buildCageUncached(b: BallBearing): Triangle[] {
   const evaluator = new Evaluator();
   evaluator.attributes = ["position", "normal"];
 

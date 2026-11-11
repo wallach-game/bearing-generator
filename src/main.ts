@@ -319,9 +319,19 @@ sizeSelect.addEventListener("change", () => {
   })
 );
 
+// Live update: while typing (debounced), and immediately on change/blur
+let liveTimer: number | undefined;
+function refreshSoon() {
+  window.clearTimeout(liveTimer);
+  liveTimer = window.setTimeout(refresh, 250);
+}
 document.querySelectorAll<HTMLElement>("#app input, #app select").forEach((input) => {
   if (["size-select", "qr-file", "qr-paste"].includes(input.id)) return;
-  input.addEventListener("change", refresh);
+  input.addEventListener("change", () => {
+    window.clearTimeout(liveTimer);
+    refresh();
+  });
+  if ((input as HTMLInputElement).type === "number") input.addEventListener("input", refreshSoon);
 });
 
 $<HTMLButtonElement>("#generate").addEventListener("click", () => generate());
