@@ -3,7 +3,9 @@ import { Triangle } from "./types";
 export interface Bearing {
   validate(): unknown;
   summary(): string;
-  getAssembledParts(explode?: number): { inner: Triangle[]; outer: Triangle[]; balls: Triangle[] };
+  getAssembledParts(explode?: number): {
+    inner: Triangle[]; outer: Triangle[]; balls: Triangle[]; cage: Triangle[]; covers: Triangle[];
+  };
   fileName: string;
   outerDiameter: number;
   width: number;

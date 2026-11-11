@@ -2,21 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Bearing } from "./bearing";
 import { Triangle } from "./types";
-
-function toGeometry(tris: Triangle[]): THREE.BufferGeometry {
-  const pos = new Float32Array(tris.length * 9);
-  tris.forEach((t, i) => {
-    [t.a, t.b, t.c].forEach((p, j) => {
-      pos[i * 9 + j * 3] = p.x;
-      pos[i * 9 + j * 3 + 1] = p.y;
-      pos[i * 9 + j * 3 + 2] = p.z;
-    });
-  });
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  g.computeVertexNormals();
-  return g;
-}
+import { toGeometry } from "./meshutil";
 
 export class Preview3D {
   private renderer: THREE.WebGLRenderer;
@@ -83,6 +69,8 @@ export class Preview3D {
     make(parts.inner, 0x4a90d9, 0.1, 0.6);
     // Balls
     make(parts.balls, 0xc8ccd0, 0.9, 0.25);
+    make(parts.cage, 0x4caf7a, 0.1, 0.55);
+    make(parts.covers, 0x9aa5b1, 0.5, 0.4);
     // Centre the model
     this.group.position.set(0, 0, -bearing.width / 2);
     if (!this.framed) {

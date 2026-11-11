@@ -113,6 +113,8 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
       </tr>
     </table>
     <label><input type="checkbox" id="print-balls"> Also print the balls (instead of using steel/glass balls)</label>
+    <label><input type="checkbox" id="cage" checked> Crown cage (one-piece ball retainer, snaps over the balls)</label>
+    <label><input type="checkbox" id="covers" checked> Dust covers (2 shields; non-contact, glued into a seat in the outer ring)</label>
     <p id="summary" style="margin:0"></p>
     </section>
     <section>
@@ -142,6 +144,8 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
             Do the same for the inner ring: one half goes through the bore from each side, so the balls sit between the grooves.
             Easiest order: inner lower half, balls, outer lower half around them, then both upper halves.</li>
         <li>Each pair of halves aligns with a small lip and recess. Secure them with a drop of CA glue, or by pressing the outer ring into a housing and the inner ring onto a shaft.</li>
+        <li>The crown cage is a single solid piece (not split): snap it over the balls from the open side before closing the top halves. It needs balls of about 2.8 mm or more and reduces the maximum ball count.</li>
+        <li>Dust covers are thin non-contact shields; glue each one into the seat on the outer face of the outer ring.</li>
         <li>Ball clearance is the gap per side between ball and groove. Raise it if the bearing is tight; 0.15 mm suits most printers.</li>
         <li>With "Number of balls" at 0, the maximum number that fits (with a small gap between balls) is used.</li>
         <li>Based on <a href="https://github.com/osuushi/bearing-generator">osuushi/bearing-generator</a> (MIT).</li>

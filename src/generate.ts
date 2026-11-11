@@ -68,5 +68,7 @@ export function bearingFromForm(): Bearing {
     clearance: num("#clearance"),
     ballCount: Math.round(num("#ball-count")) || 0,
     printBalls: el<HTMLInputElement>("#print-balls").checked,
+    cage: el<HTMLInputElement>("#cage").checked,
+    covers: el<HTMLInputElement>("#covers").checked,
   });
 }
