@@ -17,8 +17,10 @@ const ballSpacing = 0.3;
 const cageBallSpacing = 1.4;
 // The cover sits this far below the outer face inside its seat
 const coverRecess = 0.1;
-// The ball lands sit this fraction of the ball radius away from the pitch circle
-const landFactor = 0.5;
+// Conrad loading: clearance when a ball passes the inner ring land, and the
+// minimum gap between neighbouring balls while they sit in the crescent
+const loadClearance = 0.1;
+const loadBallGap = 0.05;
 const arcSteps = 24;
 const plateGap = 5;
 
@@ -31,6 +33,9 @@ export interface BallBearingParams {
   ballCount: number; // 0 = automatic
   cage: boolean; // design: use a crown cage
   covers: boolean; // design: use dust covers
+  landFactor: number; // ring shoulder height from the pitch circle, in ball radii
+  splitInner: boolean; // inner ring as two halves instead of one piece
+  splitOuter: boolean; // outer ring as two halves instead of one piece
   // Per-part fits (mm)
   lipFit: number; // alignment lip in recess, per side
   cageClearance: number; // cage notch over the ball radius
@@ -56,10 +61,21 @@ export interface PartSelection {
 
 type Lip = { xa: number; xb: number } | null;
 
-// An assemblable ball bearing. Both rings are split at mid-width into two
-// halves with a half-groove each. The halves are printed with the split face
-// up (the groove then widens upward, so no supports are needed) and are
-// assembled around the balls.
+// One printed piece of a ring (cross-section polygon in print orientation)
+export interface Piece {
+  poly: Polygon;
+  flip: boolean; // upper halves are mirrored about mid-width when assembled
+  kind: "whole" | "lower" | "upper";
+}
+
+// An assemblable ball bearing. By default both rings are ONE piece, like in a
+// real deep-groove bearing, and the balls are loaded with the Conrad method:
+// push the inner ring against one side of the outer ring, drop the balls into
+// the crescent-shaped gap on the other side, centre the rings, spread the balls
+// evenly and lock them with the crown cage. Either ring can instead be split
+// at mid-width into two halves (loads any number of balls, needs gluing).
+// z = 0 is the face on the print bed; the upper half of a one-piece ring groove
+// is limited to a 45 degree slope so it prints without supports.
 export class BallBearing implements Bearing {
   outerDiameter: number;
   boreDiameter: number;
@@ -69,6 +85,9 @@ export class BallBearing implements Bearing {
   ballCountSetting: number;
   cage: boolean;
   covers: boolean;
+  landFactor: number;
+  splitInner: boolean;
+  splitOuter: boolean;
   lipFit: number;
   cageClearance: number;
   cageWallClearance: number;
@@ -102,6 +121,9 @@ export class BallBearing implements Bearing {
     this.include = { ...p.include };
     this.cage = p.cage;
     this.covers = p.covers;
+    this.landFactor = p.landFactor;
+    this.splitInner = p.splitInner;
+    this.splitOuter = p.splitOuter;
   }
 
   get ri() { return this.boreDiameter / 2; }
@@ -112,7 +134,7 @@ export class BallBearing implements Bearing {
   get rg() { return this.r + this.clearance; }
   // Land offset from pitch circle
   get h() {
-    const base = this.r * landFactor;
+    const base = this.r * this.landFactor;
     if (!this.cage) return base;
     // Small balls leave a very narrow gap between the lands; widen it so the
     // cage wall (at least 0.8 mm) still fits, but keep it narrower than the ball.
@@ -152,11 +174,57 @@ export class BallBearing implements Bearing {
   get coverZ0() { return coverRecess; }
   get lipHeight() { return Math.min(lipMaxHeight, this.half - 1.1); }
 
-  get maxBalls(): number {
+  // Most balls that fit around the full circle (balls on the pitch circle,
+  // neighbours at least a small gap apart; more room if a cage is used):
+  //   Z_circ = floor( pi / asin( (Dw + gap) / Dpw ) )
+  get circumferenceLimit(): number {
     const gap = this.cage ? cageBallSpacing : ballSpacing;
     const ratio = (this.ballDiameter + gap) / (2 * this.rp);
     if (ratio >= 1) return 0;
     return Math.floor(Math.PI / Math.asin(ratio));
+  }
+
+  // Most balls that can be LOADED with the Conrad method (both rings one
+  // piece), or null when a ring is split and any number can be placed.
+  //
+  // Push the inner ring against one side of the outer ring. With shoulder
+  // radii Ro (outer ring) and Ri (inner ring) the eccentricity is e = Ro - Ri
+  // and the gap on the opposite side opens to 2e. Balls (radius r) rest
+  // against the outer shoulder, centres on a circle of radius Rc = Ro - r,
+  // neighbours touching, so adjacent centres are 2*asin(r / Rc) apart. A ball
+  // fits where its centre is at least Ri + r from the inner ring centre:
+  //   Rc^2 + e^2 + 2 Rc e cos(a) >= (Ri + r)^2
+  // measured from the widest point of the gap. Count the balls that fit
+  // symmetrically around the widest point (one centred, or a pair straddling).
+  get loadLimit(): number | null {
+    if (this.splitInner || this.splitOuter) return null;
+    const roL = this.rp + this.h, riL = this.rp - this.h, r = this.r;
+    const e = roL - riL;
+    const rc = roL - r - loadBallGap;
+    if (rc <= 0) return 0;
+    const step = 2 * Math.asin(Math.min(1, (r + loadBallGap) / rc));
+    const need = riL + r + loadClearance;
+    const fits = (a: number) => Math.hypot(rc * Math.cos(a) + e, rc * Math.sin(a)) >= need;
+    let best = 0;
+    // Layout A: one ball at the widest point
+    if (fits(0)) {
+      let k = 0;
+      while ((k + 1) * step <= Math.PI && fits((k + 1) * step)) k++;
+      best = Math.max(best, 1 + 2 * k);
+    }
+    // Layout B: two balls straddling the widest point
+    if (fits(step / 2)) {
+      let k = 0;
+      while ((k + 1.5) * step <= Math.PI && fits((k + 1.5) * step)) k++;
+      best = Math.max(best, 2 * (k + 1));
+    }
+    return best;
+  }
+
+  get maxBalls(): number {
+    const circ = this.circumferenceLimit;
+    const load = this.loadLimit;
+    return load === null ? circ : Math.min(circ, load);
   }
 
   get ballCount(): number {
@@ -166,7 +234,10 @@ export class BallBearing implements Bearing {
   summary(): string {
     return `${this.ballCount} × Ø${this.ballDiameter.toFixed(3).replace(/\.?0+$/, "")} mm balls` +
       (this.include.balls ? " (printed)" : " (steel/glass, bought)") +
-      (this.cage ? " + crown cage" : "") + (this.covers ? " + 2 dust covers" : "");
+      (this.cage ? " + crown cage" : "") + (this.covers ? " + 2 dust covers" : "") +
+      ` | max balls: ${this.circumferenceLimit} around the circle` +
+      (this.loadLimit === null ? "" : `, ${this.loadLimit} loadable (Conrad)`) +
+      ` | rings: inner ${this.splitInner ? "2 halves" : "1 piece"}, outer ${this.splitOuter ? "2 halves" : "1 piece"}`;
   }
 
   // Largest ball diameter that satisfies the wall thickness limits
@@ -189,8 +260,13 @@ export class BallBearing implements Bearing {
         `Ball is too large for these diameters (max about ${Math.max(0, max).toFixed(1)} mm)`
       );
     }
-    if (this.half - this.zg < minLand) {
+    const lowerExtent = this.zg;
+    const upperExtent = this.splitInner && this.splitOuter ? this.zg : this.zgUp;
+    if (this.half - Math.max(lowerExtent, upperExtent) < minLand) {
       throw new Error("Width is too small for this ball size");
+    }
+    if (!(this.landFactor >= 0.4 && this.landFactor <= 0.9)) {
+      throw new Error("Shoulder height must be between 0.4 and 0.9 ball radii");
     }
     if (this.cage && this.cageWidth < 0.6) {
       throw new Error("Balls are too small for a crown cage (the wall would be thinner than 0.6 mm)");
@@ -199,7 +275,7 @@ export class BallBearing implements Bearing {
       if (this.ro - (this.rp + this.h) - this.seatWidth < minThickness) {
         throw new Error("Outer ring wall is too thin for the dust cover seat");
       }
-      if (this.half - this.zg - this.seatDepth < 0.4) {
+      if (this.half - Math.max(this.zg, upperExtent) - this.seatDepth < 0.4) {
         throw new Error("Width is too small for the dust cover seat");
       }
     }
@@ -223,10 +299,19 @@ export class BallBearing implements Bearing {
       throw new Error("Cover gap is too large for the cover width");
     }
     if (this.maxBalls < 3) {
-      throw new Error("Not enough room for at least 3 balls");
+      const load = this.loadLimit;
+      throw new Error(
+        load !== null && load < 3 && this.circumferenceLimit >= 3
+          ? "The balls cannot be loaded: the gap between the ring shoulders is too small. Raise the shoulder height or split a ring"
+          : "Not enough room for at least 3 balls"
+      );
     }
     if (this.ballCountSetting > this.maxBalls) {
-      throw new Error(`Too many balls; at most ${this.maxBalls} fit`);
+      const load = this.loadLimit;
+      throw new Error(
+        `Too many balls; at most ${this.maxBalls} fit (${this.circumferenceLimit} around the circle` +
+          (load === null ? "" : `, ${load} can be loaded with the Conrad method`) + ")"
+      );
     }
     if (this.ballCountSetting > 0 && this.ballCountSetting < 3) {
       throw new Error("Use at least 3 balls (or 0 for automatic)");
@@ -328,6 +413,85 @@ export class BallBearing implements Bearing {
     return new Polygon(pts);
   }
 
+  // Groove profile of a one-piece ring as (u, z), ascending z, where u is the
+  // distance from the pitch circle towards the ring material. The upper side
+  // (printed as an overhang) is limited to 45 degrees: where the circle would
+  // get steeper it continues as a straight 45 degree chamfer to the shoulder.
+  grooveWhole(): { u: number; z: number }[] {
+    const { rg, h, half: H } = this;
+    const a = Math.acos(Math.min(1, h / rg)); // angle where the groove meets the shoulder
+    const lim = Math.PI / 4;
+    const pts: { u: number; z: number }[] = [];
+    // Lower side: from the shoulder down to the groove bottom
+    pts.push({ u: h, z: H - Math.sqrt(Math.max(0, rg * rg - h * h)) });
+    for (let i = 1; i <= arcSteps; i++) {
+      const psi = -a + (a * i) / arcSteps;
+      pts.push({ u: rg * Math.cos(psi), z: H + rg * Math.sin(psi) });
+    }
+    // Upper side: up to the shoulder, or up to 45 degrees and then a chamfer
+    const top = Math.min(a, lim);
+    for (let i = 1; i <= arcSteps; i++) {
+      const psi = (top * i) / arcSteps;
+      pts.push({ u: rg * Math.cos(psi), z: H + rg * Math.sin(psi) });
+    }
+    if (a <= lim) {
+      pts[pts.length - 1] = { u: h, z: H + Math.sqrt(Math.max(0, rg * rg - h * h)) };
+    } else {
+      const u45 = rg * Math.cos(lim), z45 = H + rg * Math.sin(lim);
+      pts.push({ u: h, z: z45 + (u45 - h) });
+    }
+    return pts;
+  }
+
+  // How far the one-piece groove reaches above / below mid-width at the shoulder
+  get zgUp() {
+    const g = this.grooveWhole();
+    return g[g.length - 1].z - this.half;
+  }
+
+  // One-piece outer ring, z = 0 is the bed face
+  outerWholePolygon(): Polygon {
+    const { rp, ro, h, width: W } = this;
+    const lo = rp + h;
+    const seat = this.covers;
+    const s = seat ? this.seatWidth : 0;
+    const sd = this.seatDepth;
+    const g = this.grooveWhole();
+    const pts: Point[] = [newXZPoint(lo + s, 0), newXZPoint(ro, 0), newXZPoint(ro, W), newXZPoint(lo + s, W)];
+    if (seat) pts.push(newXZPoint(lo + s, W - sd), newXZPoint(lo, W - sd));
+    for (let i = g.length - 1; i >= 0; i--) pts.push(newXZPoint(rp + g[i].u, g[i].z));
+    if (seat) pts.push(newXZPoint(lo, sd), newXZPoint(lo + s, sd));
+    return new Polygon(pts);
+  }
+
+  // One-piece inner ring
+  innerWholePolygon(): Polygon {
+    const { rp, ri, h, width: W } = this;
+    const li = rp - h;
+    const g = this.grooveWhole();
+    const pts: Point[] = [newXZPoint(ri, 0), newXZPoint(li, 0)];
+    for (const p of g) pts.push(newXZPoint(rp - p.u, p.z));
+    pts.push(newXZPoint(li, W), newXZPoint(ri, W));
+    return new Polygon(pts);
+  }
+
+  // The printed pieces of each ring: one whole piece, or two halves
+  innerPieces(): Piece[] {
+    if (!this.splitInner) return [{ poly: this.innerWholePolygon(), flip: false, kind: "whole" }];
+    return [
+      { poly: this.innerHalfPolygon("lip"), flip: false, kind: "lower" },
+      { poly: this.innerHalfPolygon("recess"), flip: true, kind: "upper" },
+    ];
+  }
+
+  outerPieces(): Piece[] {
+    if (!this.splitOuter) return [{ poly: this.outerWholePolygon(), flip: false, kind: "whole" }];
+    return [
+      { poly: this.outerHalfPolygon("lip"), flip: false, kind: "lower" },
+      { poly: this.outerHalfPolygon("recess"), flip: true, kind: "upper" },
+    ];
+  }
+
   ballPolygon(): Polygon {
     const n = 32;
     const pts: Point[] = [];
@@ -358,6 +522,26 @@ export class BallBearing implements Bearing {
     return out;
   }
 
+  // Place the pieces of one ring in a row: one in the middle, two side by side
+  private layoutPieces(pieces: Piece[], radius: number, y: number): Triangle[] {
+    if (pieces.length === 1) return this.placed(pieces[0].poly, 0, y);
+    return [
+      ...this.placed(pieces[0].poly, -(radius + plateGap / 2), y),
+      ...this.placed(pieces[1].poly, radius + plateGap / 2, y),
+    ];
+  }
+
+  // Pieces in assembled position; halves move apart along Z when exploded
+  private assemblePieces(pieces: Piece[], explode: number): Triangle[] {
+    const out: Triangle[] = [];
+    for (const p of pieces) {
+      if (p.kind === "whole") out.push(...this.placed(p.poly, 0, 0, 0));
+      else if (p.kind === "lower") out.push(...this.placed(p.poly, 0, 0, -explode));
+      else out.push(...this.placed(p.poly, 0, 0, explode, true));
+    }
+    return out;
+  }
+
   // All parts laid out on one print plate
   getTriangles(): Triangle[] {
     const tris: Triangle[] = [];
@@ -378,14 +562,12 @@ export class BallBearing implements Bearing {
     // Outer ring halves
     if (inc.outer) {
       ry = row(ro);
-      tris.push(...this.placed(this.outerHalfPolygon("lip"), -(ro + plateGap / 2), ry));
-      tris.push(...this.placed(this.outerHalfPolygon("recess"), ro + plateGap / 2, ry));
+      tris.push(...this.layoutPieces(this.outerPieces(), ro, ry));
     }
     // Inner ring halves
     if (inc.inner) {
       ry = row(liOuter);
-      tris.push(...this.placed(this.innerHalfPolygon("lip"), -(liOuter + plateGap / 2), ry));
-      tris.push(...this.placed(this.innerHalfPolygon("recess"), liOuter + plateGap / 2, ry));
+      tris.push(...this.layoutPieces(this.innerPieces(), liOuter, ry));
     }
     // Crown cage: one solid part, printed with the band down
     if (this.cage && inc.cage) {
@@ -420,14 +602,8 @@ export class BallBearing implements Bearing {
   getAssembledParts(explode = 0): {
     inner: Triangle[]; outer: Triangle[]; balls: Triangle[]; cage: Triangle[]; covers: Triangle[];
   } {
-    const inner = [
-      ...this.placed(this.innerHalfPolygon("lip"), 0, 0, -explode),
-      ...this.placed(this.innerHalfPolygon("recess"), 0, 0, explode, true),
-    ];
-    const outer = [
-      ...this.placed(this.outerHalfPolygon("lip"), 0, 0, -explode),
-      ...this.placed(this.outerHalfPolygon("recess"), 0, 0, explode, true),
-    ];
+    const inner = this.assemblePieces(this.innerPieces(), explode);
+    const outer = this.assemblePieces(this.outerPieces(), explode);
     const balls: Triangle[] = [];
     const n = this.ballCount;
     const ballPoly = this.ballPolygon();
@@ -457,15 +633,16 @@ export class BallBearing implements Bearing {
 
   drawPreview(canvas: HTMLCanvasElement) {
     const W = this.width;
-    const parts: { poly: Polygon; flip: boolean }[] = [
-      { poly: this.innerHalfPolygon("lip"), flip: false },
-      { poly: this.innerHalfPolygon("recess"), flip: true },
-      { poly: this.outerHalfPolygon("lip"), flip: false },
-      { poly: this.outerHalfPolygon("recess"), flip: true },
+    // Same colours as the 3D preview: inner ring blue, outer ring orange
+    const inFill = ["rgb(90,150,220)", "rgb(70,125,195)"];
+    const outFill = ["rgb(240,200,100)", "rgb(226,170,80)"];
+    const parts: { poly: Polygon; flip: boolean; fill: string }[] = [
+      ...this.innerPieces().map((p, i) => ({ poly: p.poly, flip: p.flip, fill: inFill[i % 2] })),
+      ...this.outerPieces().map((p, i) => ({ poly: p.poly, flip: p.flip, fill: outFill[i % 2] })),
     ];
     if (this.covers) {
-      parts.push({ poly: this.coverPolygon(), flip: false });
-      parts.push({ poly: this.coverPolygon(), flip: true });
+      parts.push({ poly: this.coverPolygon(), flip: false, fill: "rgb(150,160,170)" });
+      parts.push({ poly: this.coverPolygon(), flip: true, fill: "rgb(150,160,170)" });
     }
     const cw = canvas.width, ch = canvas.height;
     // Fit to the real extent of all parts (the cover cup hangs below the face)
@@ -496,8 +673,8 @@ export class BallBearing implements Bearing {
     ctx.fillRect(tx(-this.ri), ty(W), 2 * this.ri * scale, W * scale);
 
     const draw = (mirror: boolean) => {
-      parts.forEach((part, idx) => {
-        ctx.fillStyle = idx >= 4 ? "rgb(150,160,170)" : idx % 2 === 0 ? "rgb(240,200,100)" : "rgb(226,170,80)";
+      parts.forEach((part) => {
+        ctx.fillStyle = part.fill;
         ctx.strokeStyle = "rgba(0,0,0,0.6)";
         ctx.lineWidth = 1;
         ctx.beginPath();

@@ -9,6 +9,9 @@ export interface Config {
   count: number; // 0 = automatic
   clearance: number; // ball groove, per side
   lipFit: number;
+  landFactor: number; // ring shoulder height, in ball radii
+  splitInner: boolean; // inner ring as two halves
+  splitOuter: boolean; // outer ring as two halves
   cage: boolean; // design: use crown cage
   cageClearance: number;
   cageWall: number;
@@ -35,6 +38,9 @@ export const defaultConfig: Config = {
   count: 0,
   clearance: 0.15,
   lipFit: 0.1,
+  landFactor: 0.75,
+  splitInner: false,
+  splitOuter: false,
   cage: true,
   cageClearance: 0.2,
   cageWall: 0.25,
@@ -55,10 +61,10 @@ export const defaultConfig: Config = {
 
 const numKeys: (keyof Config)[] = [
   "bore", "outer", "width", "ball", "count", "clearance", "lipFit",
-  "cageClearance", "cageWall", "cageThick", "cageBand", "cageProng", "coverThick", "coverSeat", "coverFit", "coverGap",
+  "landFactor", "cageClearance", "cageWall", "cageThick", "cageBand", "cageProng", "coverThick", "coverSeat", "coverFit", "coverGap",
 ];
 const boolKeys: (keyof Config)[] = [
-  "cage", "covers", "incOuter", "incInner", "incCage", "incCovers", "incBalls",
+  "splitInner", "splitOuter", "cage", "covers", "incOuter", "incInner", "incCage", "incCovers", "incBalls",
 ];
 
 const PREFIX = "bb1";
@@ -112,6 +118,7 @@ export function configCaption(c: Config): string[] {
   return [
     `Ball bearing ${f(c.bore)} x ${f(c.outer)} x ${f(c.width)} mm`,
     `Balls: ${f(c.ball)} mm${c.count ? " x" + c.count : ""}   Groove clearance ${f(c.clearance)}`,
+    `Rings: inner ${c.splitInner ? "split" : "1 piece"}, outer ${c.splitOuter ? "split" : "1 piece"}, shoulder ${f(c.landFactor)}r`,
     `Lip fit ${f(c.lipFit)}   Design: ${parts.length ? parts.join(" + ") : "rings + balls"}`,
     ...(c.cage ? [`Cage: notch +${f(c.cageClearance)}, wall gap ${f(c.cageWall)}, wall ${f(c.cageThick)}, band ${f(c.cageBand)}, prongs ${f(c.cageProng)}r`] : []),
     ...(c.covers ? [`Cover: ${f(c.coverThick)} thick, seat ${f(c.coverSeat)}, fit ${f(c.coverFit)}, inner gap ${f(c.coverGap)}`] : []),

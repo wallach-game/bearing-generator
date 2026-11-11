@@ -79,6 +79,9 @@ export function readConfig(): Config {
     count: Math.round(num("#ball-count")) || 0,
     clearance: num("#clearance"),
     lipFit: num("#lip-fit"),
+    landFactor: num("#land-factor"),
+    splitInner: chk("#split-inner"),
+    splitOuter: chk("#split-outer"),
     cage: chk("#cage"),
     cageClearance: num("#cage-clearance"),
     cageWall: num("#cage-wall"),
@@ -107,6 +110,9 @@ export function writeConfig(c: Config) {
   set("#ball-count", c.count);
   set("#clearance", c.clearance);
   set("#lip-fit", c.lipFit);
+  set("#land-factor", c.landFactor);
+  tick("#split-inner", c.splitInner);
+  tick("#split-outer", c.splitOuter);
   set("#cage-clearance", c.cageClearance);
   set("#cage-wall", c.cageWall);
   set("#cage-thick", c.cageThick);
@@ -146,6 +152,9 @@ export function bearingParamsFor(c: Config): BallBearingParams {
     ballCount: c.count,
     cage: c.cage,
     covers: c.covers,
+    landFactor: c.landFactor,
+    splitInner: c.splitInner,
+    splitOuter: c.splitOuter,
     lipFit: c.lipFit,
     cageClearance: c.cageClearance,
     cageWallClearance: c.cageWall,

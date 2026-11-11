@@ -78,10 +78,10 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
     </header>
     <form onsubmit="return false">
     <p>
-    STL generator for <strong>assemblable ball bearings</strong>. Instead of printing in place, the inner
-    and outer rings are each printed as two halves (split at mid-width, each with half of the ball
-    groove). You put the balls in the groove, close the halves around them, and glue or clamp each pair together.
-    Optional one-piece crown cage and dust covers are included.
+    STL generator for <strong>assemblable ball bearings</strong>. Instead of printing in place, the parts
+    are printed separately and assembled like a real deep-groove bearing: the inner and outer ring are each
+    <strong>one piece</strong>, the balls are loaded with the Conrad method (see below) and locked in place
+    by a crown cage. Either ring can optionally be split into two halves. Dust covers are optional.
     </p>
     <section>
     <h3>Size</h3>
@@ -99,7 +99,7 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
       <summary>Table of standard sizes (click a row to use it)</summary>
       <table id="size-table">
         <thead>
-          <tr><th>Size</th><th>Bore</th><th>Outer Ø</th><th>Width</th><th>Pitch Ø</th><th>Max ball Ø</th><th>Suggested ball</th><th>Balls</th></tr>
+          <tr><th>Size</th><th>Bore</th><th>Outer Ø</th><th>Width</th><th>Pitch Ø</th><th>Max ball Ø</th><th>Suggested ball</th><th>Max balls</th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -107,6 +107,9 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
 
     <h3>Design</h3>
     <table>
+      ${checkRow("split-inner", "Split inner ring into 2 halves (default: one piece)", d.splitInner)}
+      ${checkRow("split-outer", "Split outer ring into 2 halves (default: one piece)", d.splitOuter)}
+      ${field("land-factor", "Ring shoulder height (× ball radius)", d.landFactor, 0.05, 0.4, 0.9)}
       ${checkRow("cage", "Crown cage (one-piece ball retainer)", d.cage)}
       ${checkRow("covers", "Dust covers (2 shields)", d.covers)}
     </table>
@@ -137,8 +140,8 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
     <h3>Parts to include in the STL</h3>
     <p style="margin:0">Untick parts you do not need, e.g. print only a replacement cage.</p>
     <table>
-      ${checkRow("inc-outer", "Outer ring (2 halves)", d.incOuter)}
-      ${checkRow("inc-inner", "Inner ring (2 halves)", d.incInner)}
+      ${checkRow("inc-outer", "Outer ring", d.incOuter)}
+      ${checkRow("inc-inner", "Inner ring", d.incInner)}
       ${checkRow("inc-cage", "Cage", d.incCage)}
       ${checkRow("inc-covers", "Dust covers", d.incCovers)}
       ${checkRow("inc-balls", "Printed balls", d.incBalls)}
@@ -194,10 +197,11 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
     <article>
       <h2>Assembly &amp; printing</h2>
       <ul>
-        <li>Print all parts as laid out on the plate, split face up. The grooves widen upward, so no supports are needed.</li>
-        <li>Easiest order: inner lower half, balls, outer lower half around them, then both upper halves.
-            Each pair of halves aligns with a small lip and recess; secure them with a drop of CA glue, or press the outer ring into a housing and the inner ring onto a shaft.</li>
-        <li>The crown cage is a single solid piece (not split): snap it over the balls from the open side before closing the top halves.
+        <li>Print all parts as laid out on the plate. The upper side of each ring groove is limited to a 45&deg; slope, so no supports are needed.</li>
+        <li><strong>Conrad loading</strong> (both rings one piece): put the inner ring inside the outer ring and push it against one side, so a crescent-shaped gap opens on the opposite side. Drop the balls into the crescent, centre the rings, spread the balls out evenly, then snap the crown cage on from the lower face.</li>
+        <li><strong>Maximum number of balls:</strong> the crescent limits how many balls can be loaded this way. With shoulder radii R<sub>o</sub> (outer) and R<sub>i</sub> (inner), the inner ring is pushed over by e = R<sub>o</sub> &minus; R<sub>i</sub>. Balls of radius r rest on the outer shoulder at R<sub>c</sub> = R<sub>o</sub> &minus; r, neighbours touching (2&middot;asin(r/R<sub>c</sub>) apart), and a ball fits where R<sub>c</sub>&sup2; + e&sup2; + 2R<sub>c</sub>e&middot;cos&alpha; &ge; (R<sub>i</sub> + r)&sup2; (&alpha; measured from the widest point). The count is the most balls that fit that way; it is shown above next to the limit for the full circle, Z = &lfloor;&pi; / asin((D<sub>w</sub> + gap) / D<sub>pw</sub>)&rfloor;, and the smaller of the two is used. A higher ring shoulder opens a wider crescent and allows more balls, at the cost of a shallower groove.</li>
+        <li>If you split a ring into halves, any number of balls fits. Each pair of halves aligns with a small lip and recess; secure them with a drop of CA glue.</li>
+        <li>The crown cage is a single solid piece (not split): with one-piece rings it snaps over the balls from the lower face once they are spread evenly.
             Like in a real bearing it sits entirely inside the bearing width (band under the balls); that needs balls clearly smaller than the bearing width. The wall thickness, band height and prong height are adjustable; the cage also reduces the maximum ball count.</li>
         <li>Dust covers are non-contact shields glued into a seat in the outer ring. The cage sits under the lower cover; with covers fitted use somewhat smaller balls (for a 608, 3 mm).</li>
         <li>All clearances are adjustable. Raise the ball clearance if the bearing is tight; 0.15 mm suits most printers.</li>
@@ -223,7 +227,7 @@ function constrainField(id: string) {
 
 const numericIds = [
   "#outer-diameter", "#bore-diameter", "#width", "#clearance", "#ball-custom", "#ball-count",
-  "#lip-fit", "#cage-clearance", "#cage-wall", "#cover-fit", "#cover-gap", "#cover-thick", "#cover-seat", "#cage-thick", "#cage-band", "#cage-prong",
+  "#lip-fit", "#land-factor", "#cage-clearance", "#cage-wall", "#cover-fit", "#cover-gap", "#cover-thick", "#cover-seat", "#cage-thick", "#cage-band", "#cage-prong",
 ];
 
 let labelTimer: number | undefined;

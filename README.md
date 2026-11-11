@@ -24,14 +24,29 @@ It is fully client-side; there is no server.
 
 ## Design
 
-Both the inner and the outer ring are split at mid-width into two halves, each
-holding half of the ball groove. Each pair of halves aligns with a small lip and
-recess. Parts are printed with the **split face up**: the groove then widens
-upward so no supports are needed.
+Like a real deep-groove bearing, the inner and the outer ring are each **one
+piece**. The balls are loaded with the **Conrad method** and locked in place by
+a one-piece crown cage:
 
-Assembly: put the balls in the groove of one half-set, close the other halves
-over them, and secure each pair with a drop of CA glue (or clamp the outer ring
-in a housing and the inner ring on a shaft).
+1. Put the inner ring inside the outer ring and push it against one side. A
+   crescent-shaped gap opens on the opposite side.
+2. Drop the balls into the crescent, centre the rings, spread the balls evenly.
+3. Snap the crown cage on from the lower face.
+
+**Maximum number of balls.** With shoulder radii Ro (outer ring) and Ri (inner
+ring) the inner ring is pushed over by e = Ro - Ri. Balls of radius r rest on the
+outer shoulder at Rc = Ro - r with neighbours touching (2*asin(r/Rc) apart), and
+a ball fits where Rc^2 + e^2 + 2*Rc*e*cos(a) >= (Ri + r)^2 (a measured from the
+widest point of the gap). The generator counts the most balls that fit this
+way (`loadLimit` in `src/bearing-ball.ts`) and compares it with the limit for the
+full circle, Z = floor(pi / asin((Dw + gap) / Dpw)); the smaller one is used. A
+higher shoulder ("Ring shoulder height") opens a wider crescent, so more balls
+can be loaded, at the cost of a shallower groove.
+
+The upper side of each ring groove is limited to a 45 degree slope, so the rings
+print without supports. Either ring can optionally be **split at mid-width** into
+two halves (each pair aligns with a small lip and recess and is glued); then any
+number of balls fits.
 
 "Ball clearance" is the gap per side between ball and groove (default 0.15 mm).
 
