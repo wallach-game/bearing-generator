@@ -1,78 +1,72 @@
 import { Bearing } from "./bearing";
-import { Bearing2Ring } from "./bearing-2-ring";
-import { Bearing3Ring } from "./bearing-3-ring";
+import { BallBearing } from "./bearing-ball";
 import { makeBinarySTL } from "./stl";
+import { Preview3D } from "./preview3d";
+
+let preview3d: Preview3D | null = null;
+
+function el<T extends HTMLElement>(sel: string): T {
+  return document.querySelector<T>(sel)!;
+}
 
 export function generate() {
-  // Get the bearing
-  let bearing = bearingFromForm();
-  // Get the triangles
-  let triangles = bearing.getTriangles();
-  // Create the STL contents
-  const stl = makeBinarySTL(triangles);
-
-  // Create a link to download the STL
-  let link = document.createElement("a");
+  const bearing = bearingFromForm();
+  try {
+    bearing.validate();
+  } catch (e) {
+    alert(e instanceof Error ? e.message : "Invalid parameters");
+    return;
+  }
+  const stl = makeBinarySTL(bearing.getTriangles());
+  const link = document.createElement("a");
   link.download = bearing.fileName;
-  // We have a uint8array, but we need a downloadable url. We can do this by creating a blob.
-  let blob = new Blob([stl], { type: "application/octet-stream" });
-  link.href = URL.createObjectURL(blob);
+  link.href = URL.createObjectURL(new Blob([stl], { type: "application/octet-stream" }));
   link.click();
 }
 
-export function generatePreview() {
-  let bearing = bearingFromForm();
-  let canvas = document.querySelector<HTMLCanvasElement>("#preview")!;
-  bearing.drawPreview(canvas);
-}
-
-export function validate() {
-  let bearing = bearingFromForm();
+// Returns true if the current parameters are valid
+export function validate(): boolean {
+  const bearing = bearingFromForm();
   try {
     bearing.validate();
-    document.querySelector("#error")!.textContent = "";
+    el("#error").textContent = "";
+    el("#summary").textContent = bearing.summary();
+    return true;
   } catch (e) {
-    if (e instanceof Error) {
-      document.querySelector("#error")!.textContent = e.message;
-    } else {
-      document.querySelector("#error")!.textContent = "Unknown error";
-    }
+    el("#error").textContent = e instanceof Error ? e.message : "Unknown error";
+    el("#summary").textContent = "";
+    return false;
   }
 }
 
-function bearingFromForm(): Bearing {
-  // Get the form values
-  let rings = parseInt(
-    document.querySelector<HTMLInputElement>(
-      'input[name="number-of-rings"]:checked'
-    )!.value
-  );
-  let outerDiameter = parseFloat(
-    document.querySelector<HTMLInputElement>("#outer-diameter")!.value
-  );
-  let boreDiameter = parseFloat(
-    document.querySelector<HTMLInputElement>("#bore-diameter")!.value
-  );
-  let width = parseFloat(
-    document.querySelector<HTMLInputElement>("#width")!.value
-  );
-  let clearance = parseFloat(
-    document.querySelector<HTMLInputElement>("#clearance")!.value
-  );
-  if (rings === 2) {
-    return new Bearing2Ring({
-      outerDiameter: outerDiameter,
-      boreDiameter: boreDiameter,
-      width: width,
-      clearance: clearance,
-    });
-  } else {
-    // Create the bearing
-    return new Bearing3Ring({
-      outerDiameter: outerDiameter,
-      boreDiameter: boreDiameter,
-      width: width,
-      clearance: clearance,
-    });
-  }
+export function generatePreview() {
+  if (!validate()) return;
+  const bearing = bearingFromForm();
+  bearing.drawPreview(el<HTMLCanvasElement>("#preview"));
+  if (!preview3d) preview3d = new Preview3D(el<HTMLCanvasElement>("#preview3d"));
+  preview3d.exploded = el<HTMLInputElement>("#exploded").checked;
+  preview3d.cutaway = el<HTMLInputElement>("#cutaway").checked;
+  preview3d.update(bearing);
+}
+
+export function ballDiameterFromForm(): number {
+  const sel = el<HTMLSelectElement>("#ball-select").value;
+  if (sel === "custom") return parseFloat(el<HTMLInputElement>("#ball-custom").value);
+  return parseFloat(sel);
+}
+
+function num(sel: string): number {
+  return parseFloat(el<HTMLInputElement>(sel).value);
+}
+
+export function bearingFromForm(): Bearing {
+  return new BallBearing({
+    outerDiameter: num("#outer-diameter"),
+    boreDiameter: num("#bore-diameter"),
+    width: num("#width"),
+    ballDiameter: ballDiameterFromForm(),
+    clearance: num("#clearance"),
+    ballCount: Math.round(num("#ball-count")) || 0,
+    printBalls: el<HTMLInputElement>("#print-balls").checked,
+  });
 }
