@@ -36,6 +36,7 @@ export interface BallBearingParams {
   lipFit: number; // alignment lip in recess, per side
   cageClearance: number; // cage notch over the ball radius
   cageWallClearance: number; // cage wall to ring lands, per side
+  cageThick: number; // radial wall thickness
   cageBand: number; // height of the solid band below the notches
   cageProng: number; // prong top above ball centre, in ball radii
   coverFit: number; // cover edge in its seat, per side
@@ -70,6 +71,7 @@ export class BallBearing implements Bearing {
   lipFit: number;
   cageClearance: number;
   cageWallClearance: number;
+  cageThickness: number;
   cageBandHeight: number;
   cageProngFactor: number;
   coverFit: number;
@@ -87,6 +89,7 @@ export class BallBearing implements Bearing {
     this.lipFit = p.lipFit;
     this.cageClearance = p.cageClearance;
     this.cageWallClearance = p.cageWallClearance;
+    this.cageThickness = p.cageThick;
     this.cageBandHeight = p.cageBand;
     this.cageProngFactor = p.cageProng;
     this.coverFit = p.coverFit;
@@ -108,23 +111,21 @@ export class BallBearing implements Bearing {
   // Axial half-extent of the groove on the land
   get zg() { return Math.sqrt(Math.max(0, this.rg * this.rg - this.h * this.h)); }
   // Crown cage geometry
-  get cageWidth() { return 2 * this.h - 2 * this.cageWallClearance; }
-  // The solid band stands proud of the lower face (like the crown in a real
-  // cage); the thin wall runs up through the gap between the rings.
+  // Radial wall thickness, limited by the gap between the ring lands
+  get cageWidth() { return Math.min(this.cageThickness, 2 * this.h - 2 * this.cageWallClearance); }
+  // As in a real bearing the whole cage sits inside the bearing width: the
+  // solid band lies directly under the balls (between the balls and the lower
+  // face / lower cover) and the thin wall runs up between the balls.
   get cageBand() { return this.cageBandHeight; }
-  get cageBottom() { return -this.cageBand; }
+  get cageBottom() { return this.half - this.cagePocketRadius - this.cageBand; }
+  // Lowest z the cage may reach: the lower face, or the lower cover when fitted
+  get cageFloor() { return this.covers ? seatDepth + 0.15 : 0.15; }
   get cageTop() {
     const limit = this.covers ? this.width - seatDepth - 0.2 : this.width - 0.3;
     return Math.min(this.half + this.cageProngFactor * this.r, limit);
   }
   // Width of the neck above each notch (narrower than the ball: snap fit)
   get cageNeck() { return 1.8 * this.r; }
-  // With a crown cage the lower cover is a cup: a plate below the proud
-  // band, plus a thin spigot running up outside the cage into the seat.
-  get lowerCoverIsCup() { return this.cage; }
-  get cupPlateTop() { return -(this.cageBand + 0.3); }
-  get cupPlateBottom() { return this.cupPlateTop - coverThickness; }
-  get cupSpigotInner() { return this.rp + this.h - 0.1; }
   hasSeat(_kind: "lip" | "recess") { return this.covers; }
   get cagePocketRadius() { return this.r + this.cageClearance; }
   // Dust cover geometry
@@ -173,8 +174,8 @@ export class BallBearing implements Bearing {
     if (this.half - this.zg < minLand) {
       throw new Error("Width is too small for this ball size");
     }
-    if (this.cage && this.cageWidth < 0.9) {
-      throw new Error("Balls are too small for a crown cage (min about 2.8 mm)");
+    if (this.cage && this.cageWidth < 0.6) {
+      throw new Error("Balls are too small for a crown cage (the wall would be thinner than 0.6 mm)");
     }
     if (this.covers) {
       if (this.ro - (this.rp + this.h) - seatWidth < minThickness) {
@@ -183,6 +184,11 @@ export class BallBearing implements Bearing {
       if (this.half - this.zg - seatDepth < 0.4) {
         throw new Error("Width is too small for the dust cover seat");
       }
+    }
+    if (this.cage && this.cageBottom < this.cageFloor) {
+      throw new Error(
+        "Not enough room for the cage inside the bearing: use smaller balls, a lower cage band height, or a wider bearing"
+      );
     }
     if (this.cage && this.cageTop < this.half + 0.6 * this.r) {
       throw new Error("Width is too small for the crown cage with dust covers; turn covers off or use a wider bearing");
@@ -255,19 +261,7 @@ export class BallBearing implements Bearing {
     return new Polygon(pts);
   }
 
-  coverPolygon(side: "lower" | "upper" = "upper"): Polygon {
-    if (side === "lower" && this.lowerCoverIsCup) {
-      const zb = this.cupPlateBottom, zt = this.cupPlateTop;
-      const ci = this.coverInner, co = this.coverOuter, ti = this.cupSpigotInner;
-      return new Polygon([
-        newXZPoint(ci, zb),
-        newXZPoint(co, zb),
-        newXZPoint(co, seatDepth),
-        newXZPoint(ti, seatDepth),
-        newXZPoint(ti, zt),
-        newXZPoint(ci, zt),
-      ]);
-    }
+  coverPolygon(): Polygon {
     const z0 = this.coverZ0;
     return new Polygon([
       newXZPoint(this.coverInner, z0),
@@ -374,9 +368,8 @@ export class BallBearing implements Bearing {
     if (this.covers && inc.covers) {
       const co = this.coverOuter;
       ry = row(co);
-      const lowerZ0 = this.lowerCoverIsCup ? this.cupPlateBottom : this.coverZ0;
-      tris.push(...this.placed(this.coverPolygon("lower"), -(co + plateGap / 2), ry, -lowerZ0));
-      tris.push(...this.placed(this.coverPolygon("upper"), co + plateGap / 2, ry, -this.coverZ0));
+      tris.push(...this.placed(this.coverPolygon(), -(co + plateGap / 2), ry, -this.coverZ0));
+      tris.push(...this.placed(this.coverPolygon(), co + plateGap / 2, ry, -this.coverZ0));
     }
     // Optional printed balls
     if (inc.balls) {
@@ -428,8 +421,8 @@ export class BallBearing implements Bearing {
     const cage = this.cage ? shift(this.cageTriangles(), 0, 0, -explode * 1.1) : [];
     const covers: Triangle[] = [];
     if (this.covers) {
-      covers.push(...this.placed(this.coverPolygon("lower"), 0, 0, -explode * 1.6));
-      covers.push(...this.placed(this.coverPolygon("upper"), 0, 0, explode * 1.6, true));
+      covers.push(...this.placed(this.coverPolygon(), 0, 0, -explode * 1.6));
+      covers.push(...this.placed(this.coverPolygon(), 0, 0, explode * 1.6, true));
     }
     return { inner, outer, balls, cage, covers };
   }
@@ -443,8 +436,8 @@ export class BallBearing implements Bearing {
       { poly: this.outerHalfPolygon("recess"), flip: true },
     ];
     if (this.covers) {
-      parts.push({ poly: this.coverPolygon("lower"), flip: false });
-      parts.push({ poly: this.coverPolygon("upper"), flip: true });
+      parts.push({ poly: this.coverPolygon(), flip: false });
+      parts.push({ poly: this.coverPolygon(), flip: true });
     }
     const cw = canvas.width, ch = canvas.height;
     // Fit to the real extent of all parts (the cover cup hangs below the face)

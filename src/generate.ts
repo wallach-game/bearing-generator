@@ -75,6 +75,7 @@ export function readConfig(): Config {
     cage: chk("#cage"),
     cageClearance: num("#cage-clearance"),
     cageWall: num("#cage-wall"),
+    cageThick: num("#cage-thick"),
     cageBand: num("#cage-band"),
     cageProng: num("#cage-prong"),
     covers: chk("#covers"),
@@ -99,6 +100,7 @@ export function writeConfig(c: Config) {
   set("#lip-fit", c.lipFit);
   set("#cage-clearance", c.cageClearance);
   set("#cage-wall", c.cageWall);
+  set("#cage-thick", c.cageThick);
   set("#cage-band", c.cageBand);
   set("#cage-prong", c.cageProng);
   set("#cover-fit", c.coverFit);
@@ -136,6 +138,7 @@ export function bearingParamsFor(c: Config): BallBearingParams {
     lipFit: c.lipFit,
     cageClearance: c.cageClearance,
     cageWallClearance: c.cageWall,
+    cageThick: c.cageThick,
     cageBand: c.cageBand,
     cageProng: c.cageProng,
     coverFit: c.coverFit,

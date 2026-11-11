@@ -12,6 +12,7 @@ export interface Config {
   cage: boolean; // design: use crown cage
   cageClearance: number;
   cageWall: number;
+  cageThick: number; // radial wall thickness
   cageBand: number; // height of the solid band below the notches
   cageProng: number; // prong top above ball centre, in ball radii
   covers: boolean; // design: use dust covers
@@ -35,6 +36,7 @@ export const defaultConfig: Config = {
   cage: true,
   cageClearance: 0.2,
   cageWall: 0.25,
+  cageThick: 1,
   cageBand: 0.8,
   cageProng: 1,
   covers: false,
@@ -49,7 +51,7 @@ export const defaultConfig: Config = {
 
 const numKeys: (keyof Config)[] = [
   "bore", "outer", "width", "ball", "count", "clearance", "lipFit",
-  "cageClearance", "cageWall", "cageBand", "cageProng", "coverFit", "coverGap",
+  "cageClearance", "cageWall", "cageThick", "cageBand", "cageProng", "coverFit", "coverGap",
 ];
 const boolKeys: (keyof Config)[] = [
   "cage", "covers", "incOuter", "incInner", "incCage", "incCovers", "incBalls",
@@ -107,7 +109,7 @@ export function configCaption(c: Config): string[] {
     `Ball bearing ${f(c.bore)} x ${f(c.outer)} x ${f(c.width)} mm`,
     `Balls: ${f(c.ball)} mm${c.count ? " x" + c.count : ""}   Groove clearance ${f(c.clearance)}`,
     `Lip fit ${f(c.lipFit)}   Design: ${parts.length ? parts.join(" + ") : "rings + balls"}`,
-    ...(c.cage ? [`Cage: notch +${f(c.cageClearance)}, wall gap ${f(c.cageWall)}, band ${f(c.cageBand)}, prongs ${f(c.cageProng)}r`] : []),
+    ...(c.cage ? [`Cage: notch +${f(c.cageClearance)}, wall gap ${f(c.cageWall)}, wall ${f(c.cageThick)}, band ${f(c.cageBand)}, prongs ${f(c.cageProng)}r`] : []),
     ...(c.covers ? [`Cover: fit ${f(c.coverFit)}, inner gap ${f(c.coverGap)}`] : []),
   ];
 }

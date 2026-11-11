@@ -140,8 +140,17 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
       <tr>
         ${field("cover-fit", "Cover edge in seat", d.coverFit, 0.05, 0, 0.5)}
         ${field("cover-gap", "Cover gap over inner ring", d.coverGap, 0.05, 0.1, 1.5)}
-        ${field("cage-band", "Cage band height (mm)", d.cageBand, 0.1, 0.6, 3)}
-        ${field("cage-prong", "Cage prong height (× ball radius)", d.cageProng, 0.1, 0.6, 1.6)}
+        <td></td><td></td>
+      </tr>
+    </table>
+
+    <h3>Cage size</h3>
+    <table>
+      <tr>
+        ${field("cage-thick", "Wall thickness (mm)", d.cageThick, 0.1, 0.6, 3)}
+        ${field("cage-band", "Band height (mm)", d.cageBand, 0.1, 0.4, 3)}
+        ${field("cage-prong", "Prong height (× ball radius)", d.cageProng, 0.1, 0.6, 1.6)}
+        <td></td>
       </tr>
     </table>
 
@@ -207,8 +216,8 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
         <li>Easiest order: inner lower half, balls, outer lower half around them, then both upper halves.
             Each pair of halves aligns with a small lip and recess; secure them with a drop of CA glue, or press the outer ring into a housing and the inner ring onto a shaft.</li>
         <li>The crown cage is a single solid piece (not split): snap it over the balls from the open side before closing the top halves.
-            Its band stands proud of the lower face, like a real crown. It needs balls of about 2.8 mm or more and reduces the maximum ball count.</li>
-        <li>Dust covers are non-contact shields glued into a seat in the outer ring. With a cage, the lower cover is a cup that fits over the crown band.</li>
+            Like in a real bearing it sits entirely inside the bearing width (band under the balls); that needs balls clearly smaller than the bearing width. The wall thickness, band height and prong height are adjustable; the cage also reduces the maximum ball count.</li>
+        <li>Dust covers are non-contact shields glued into a seat in the outer ring. The cage sits under the lower cover; with covers fitted use somewhat smaller balls (for a 608, 3 mm).</li>
         <li>All clearances are adjustable. Raise the ball clearance if the bearing is tight; 0.15 mm suits most printers.</li>
         <li>Based on <a href="https://github.com/osuushi/bearing-generator">osuushi/bearing-generator</a> (MIT).</li>
       </ul>
@@ -232,7 +241,7 @@ function constrainField(id: string) {
 
 const numericIds = [
   "#outer-diameter", "#bore-diameter", "#width", "#clearance", "#ball-custom", "#ball-count",
-  "#lip-fit", "#cage-clearance", "#cage-wall", "#cover-fit", "#cover-gap", "#cage-band", "#cage-prong",
+  "#lip-fit", "#cage-clearance", "#cage-wall", "#cover-fit", "#cover-gap", "#cage-thick", "#cage-band", "#cage-prong",
 ];
 
 let labelTimer: number | undefined;
