@@ -64,13 +64,13 @@ const ballOptions = ballSizes
   .join("");
 
 const d = defaultConfig;
-const field = (id: string, label: string, value: number, step: number, min: number, max: number) => `
-  <td>
-    <label for="${id}">${label}</label>
-    <input type="number" id="${id}" value="${value}" step="${step}" min="${min}" max="${max}" required>
-  </td>`;
-const check = (id: string, label: string, on: boolean) =>
-  `<label style="display:inline-block;margin-right:1.2em"><input type="checkbox" id="${id}"${on ? " checked" : ""}> ${label}</label>`;
+// One parameter per row: label on the left, input on the right
+const row = (label: string, control: string, forId = "") =>
+  `<tr><td style="width:55%"><label${forId ? ` for="${forId}"` : ""}>${label}</label></td><td>${control}</td></tr>`;
+const field = (id: string, label: string, value: number, step: number, min: number, max: number) =>
+  row(label, `<input type="number" id="${id}" value="${value}" step="${step}" min="${min}" max="${max}" required>`, id);
+const checkRow = (id: string, label: string, on: boolean) =>
+  row(label, `<input type="checkbox" id="${id}"${on ? " checked" : ""}>`, id);
 
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
     <header style="margin-bottom:0; padding-bottom:0;">
@@ -86,33 +86,13 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
     <section>
     <h3>Size</h3>
     <table>
-      <tr>
-        <td>
-          <label for="size-select">Standard size</label>
-          <select id="size-select">
-            <option value="custom">Custom</option>
-            ${sizeOptions}
-          </select>
-        </td>
-        ${field("bore-diameter", "Bore diameter (mm)", d.bore, 0.1, 1, 1000)}
-        ${field("outer-diameter", "Outer diameter (mm)", d.outer, 0.1, 8, 1000)}
-        ${field("width", "Width (mm)", d.width, 0.1, 4, 1000)}
-      </tr>
-      <tr>
-        <td>
-          <label for="ball-select">Ball diameter</label>
-          <select id="ball-select">
-            ${ballOptions}
-            <option value="custom">Custom…</option>
-          </select>
-        </td>
-        <td>
-          <label for="ball-custom">Custom ball (mm)</label>
-          <input type="number" id="ball-custom" value="4" step="0.001" min="1" max="50" disabled>
-        </td>
-        ${field("ball-count", "Number of balls (0 = max)", d.count, 1, 0, 100)}
-        <td></td>
-      </tr>
+      ${row("Standard size", `<select id="size-select"><option value="custom">Custom</option>${sizeOptions}</select>`, "size-select")}
+      ${field("bore-diameter", "Bore diameter (mm)", d.bore, 0.1, 1, 1000)}
+      ${field("outer-diameter", "Outer diameter (mm)", d.outer, 0.1, 8, 1000)}
+      ${field("width", "Width (mm)", d.width, 0.1, 4, 1000)}
+      ${row("Ball diameter", `<select id="ball-select">${ballOptions}<option value="custom">Custom…</option></select>`, "ball-select")}
+      ${row("Custom ball diameter (mm)", `<input type="number" id="ball-custom" value="4" step="0.001" min="1" max="50" disabled>`, "ball-custom")}
+      ${field("ball-count", "Number of balls (0 = max)", d.count, 1, 0, 100)}
     </table>
 
     <details id="size-table-box">
@@ -126,41 +106,37 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
     </details>
 
     <h3>Design</h3>
-    ${check("cage", "Crown cage (one-piece ball retainer)", d.cage)}
-    ${check("covers", "Dust covers (2 shields)", d.covers)}
+    <table>
+      ${checkRow("cage", "Crown cage (one-piece ball retainer)", d.cage)}
+      ${checkRow("covers", "Dust covers (2 shields)", d.covers)}
+    </table>
 
     <h3>Clearances (mm)</h3>
     <table>
-      <tr>
-        ${field("clearance", "Ball in groove (per side)", d.clearance, 0.05, 0, 0.5)}
-        ${field("lip-fit", "Ring-half lip fit", d.lipFit, 0.05, 0, 0.5)}
-        ${field("cage-clearance", "Cage notch over ball radius", d.cageClearance, 0.05, 0, 0.6)}
-        ${field("cage-wall", "Cage wall to ring lands", d.cageWall, 0.05, 0.05, 0.6)}
-      </tr>
-      <tr>
-        ${field("cover-fit", "Cover edge in seat", d.coverFit, 0.05, 0, 0.5)}
-        ${field("cover-gap", "Cover gap over inner ring", d.coverGap, 0.05, 0.1, 1.5)}
-        <td></td><td></td>
-      </tr>
+      ${field("clearance", "Ball in groove (per side)", d.clearance, 0.05, 0, 0.5)}
+      ${field("lip-fit", "Ring-half lip fit", d.lipFit, 0.05, 0, 0.5)}
+      ${field("cage-clearance", "Cage notch over ball radius", d.cageClearance, 0.05, 0, 0.6)}
+      ${field("cage-wall", "Cage wall to ring lands", d.cageWall, 0.05, 0.05, 0.6)}
+      ${field("cover-fit", "Cover edge in seat", d.coverFit, 0.05, 0, 0.5)}
+      ${field("cover-gap", "Cover gap over inner ring", d.coverGap, 0.05, 0.1, 1.5)}
     </table>
 
     <h3>Cage size</h3>
     <table>
-      <tr>
-        ${field("cage-thick", "Wall thickness (mm)", d.cageThick, 0.1, 0.6, 3)}
-        ${field("cage-band", "Band height (mm)", d.cageBand, 0.1, 0.4, 3)}
-        ${field("cage-prong", "Prong height (× ball radius)", d.cageProng, 0.1, 0.6, 1.6)}
-        <td></td>
-      </tr>
+      ${field("cage-thick", "Wall thickness (mm)", d.cageThick, 0.1, 0.6, 3)}
+      ${field("cage-band", "Band height (mm)", d.cageBand, 0.1, 0.4, 3)}
+      ${field("cage-prong", "Prong height (× ball radius)", d.cageProng, 0.1, 0.6, 1.6)}
     </table>
 
     <h3>Parts to include in the STL</h3>
     <p style="margin:0">Untick parts you do not need, e.g. print only a replacement cage.</p>
-    ${check("inc-outer", "Outer ring (2 halves)", d.incOuter)}
-    ${check("inc-inner", "Inner ring (2 halves)", d.incInner)}
-    ${check("inc-cage", "Cage", d.incCage)}
-    ${check("inc-covers", "Dust covers", d.incCovers)}
-    ${check("inc-balls", "Printed balls", d.incBalls)}
+    <table>
+      ${checkRow("inc-outer", "Outer ring (2 halves)", d.incOuter)}
+      ${checkRow("inc-inner", "Inner ring (2 halves)", d.incInner)}
+      ${checkRow("inc-cage", "Cage", d.incCage)}
+      ${checkRow("inc-covers", "Dust covers", d.incCovers)}
+      ${checkRow("inc-balls", "Printed balls", d.incBalls)}
+    </table>
     <p id="summary" style="margin:0"></p>
     </section>
 
