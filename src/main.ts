@@ -121,6 +121,12 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
       ${field("cover-gap", "Cover gap over inner ring", d.coverGap, 0.05, 0.1, 1.5)}
     </table>
 
+    <h3>Dust cover size</h3>
+    <table>
+      ${field("cover-thick", "Cover thickness (mm)", d.coverThick, 0.1, 0.4, 2)}
+      ${field("cover-seat", "Cover seat width (mm, overlap with outer ring)", d.coverSeat, 0.1, 0.4, 2)}
+    </table>
+
     <h3>Cage size</h3>
     <table>
       ${field("cage-thick", "Wall thickness (mm)", d.cageThick, 0.1, 0.6, 3)}
@@ -217,7 +223,7 @@ function constrainField(id: string) {
 
 const numericIds = [
   "#outer-diameter", "#bore-diameter", "#width", "#clearance", "#ball-custom", "#ball-count",
-  "#lip-fit", "#cage-clearance", "#cage-wall", "#cover-fit", "#cover-gap", "#cage-thick", "#cage-band", "#cage-prong",
+  "#lip-fit", "#cage-clearance", "#cage-wall", "#cover-fit", "#cover-gap", "#cover-thick", "#cover-seat", "#cage-thick", "#cage-band", "#cage-prong",
 ];
 
 let labelTimer: number | undefined;

@@ -79,6 +79,8 @@ export function readConfig(): Config {
     cageBand: num("#cage-band"),
     cageProng: num("#cage-prong"),
     covers: chk("#covers"),
+    coverThick: num("#cover-thick"),
+    coverSeat: num("#cover-seat"),
     coverFit: num("#cover-fit"),
     coverGap: num("#cover-gap"),
     incOuter: chk("#inc-outer"),
@@ -103,6 +105,8 @@ export function writeConfig(c: Config) {
   set("#cage-thick", c.cageThick);
   set("#cage-band", c.cageBand);
   set("#cage-prong", c.cageProng);
+  set("#cover-thick", c.coverThick);
+  set("#cover-seat", c.coverSeat);
   set("#cover-fit", c.coverFit);
   set("#cover-gap", c.coverGap);
   tick("#cage", c.cage);
@@ -141,6 +145,8 @@ export function bearingParamsFor(c: Config): BallBearingParams {
     cageThick: c.cageThick,
     cageBand: c.cageBand,
     cageProng: c.cageProng,
+    coverThick: c.coverThick,
+    coverSeat: c.coverSeat,
     coverFit: c.coverFit,
     coverGap: c.coverGap,
     include: {

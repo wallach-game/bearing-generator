@@ -15,9 +15,8 @@ const lipMaxHeight = 0.8;
 const ballSpacing = 0.3;
 // Minimum gap between adjacent balls when a cage is used (leaves room for prongs)
 const cageBallSpacing = 1.4;
-const seatWidth = 0.8;
-const seatDepth = 0.8;
-const coverThickness = 0.7;
+// The cover sits this far below the outer face inside its seat
+const coverRecess = 0.1;
 // The ball lands sit this fraction of the ball radius away from the pitch circle
 const landFactor = 0.5;
 const arcSteps = 24;
@@ -39,6 +38,8 @@ export interface BallBearingParams {
   cageThick: number; // radial wall thickness
   cageBand: number; // height of the solid band below the notches
   cageProng: number; // prong top above ball centre, in ball radii
+  coverThick: number; // cover thickness (axial)
+  coverSeat: number; // cover seat width (radial overlap with the outer ring)
   coverFit: number; // cover edge in its seat, per side
   coverGap: number; // cover inner edge over the inner ring land
   // Which parts go into the STL
@@ -74,6 +75,8 @@ export class BallBearing implements Bearing {
   cageThickness: number;
   cageBandHeight: number;
   cageProngFactor: number;
+  coverThickness: number;
+  coverSeatWidth: number;
   coverFit: number;
   coverGap: number;
   include: PartSelection;
@@ -92,6 +95,8 @@ export class BallBearing implements Bearing {
     this.cageThickness = p.cageThick;
     this.cageBandHeight = p.cageBand;
     this.cageProngFactor = p.cageProng;
+    this.coverThickness = p.coverThick;
+    this.coverSeatWidth = p.coverSeat;
     this.coverFit = p.coverFit;
     this.coverGap = p.coverGap;
     this.include = { ...p.include };
@@ -106,7 +111,14 @@ export class BallBearing implements Bearing {
   // Groove radius
   get rg() { return this.r + this.clearance; }
   // Land offset from pitch circle
-  get h() { return this.r * landFactor; }
+  get h() {
+    const base = this.r * landFactor;
+    if (!this.cage) return base;
+    // Small balls leave a very narrow gap between the lands; widen it so the
+    // cage wall (at least 0.8 mm) still fits, but keep it narrower than the ball.
+    const need = (0.8 + 2 * this.cageWallClearance) / 2;
+    return Math.max(base, Math.min(need, 0.85 * this.r));
+  }
   get half() { return this.width / 2; }
   // Axial half-extent of the groove on the land
   get zg() { return Math.sqrt(Math.max(0, this.rg * this.rg - this.h * this.h)); }
@@ -119,9 +131,12 @@ export class BallBearing implements Bearing {
   get cageBand() { return this.cageBandHeight; }
   get cageBottom() { return this.half - this.cagePocketRadius - this.cageBand; }
   // Lowest z the cage may reach: the lower face, or the lower cover when fitted
-  get cageFloor() { return this.covers ? seatDepth + 0.15 : 0.15; }
+  // Cover geometry (axial thickness, radial seat width, seat depth)
+  get seatWidth() { return this.coverSeatWidth; }
+  get seatDepth() { return this.coverThickness + coverRecess; }
+  get cageFloor() { return this.covers ? this.seatDepth + 0.15 : 0.15; }
   get cageTop() {
-    const limit = this.covers ? this.width - seatDepth - 0.2 : this.width - 0.3;
+    const limit = this.covers ? this.width - this.seatDepth - 0.2 : this.width - 0.3;
     return Math.min(this.half + this.cageProngFactor * this.r, limit);
   }
   // Width of the neck above each notch (narrower than the ball: snap fit)
@@ -130,8 +145,8 @@ export class BallBearing implements Bearing {
   get cagePocketRadius() { return this.r + this.cageClearance; }
   // Dust cover geometry
   get coverInner() { return this.rp - this.h + this.coverGap; }
-  get coverOuter() { return this.rp + this.h + seatWidth - this.coverFit; }
-  get coverZ0() { return seatDepth - coverThickness; }
+  get coverOuter() { return this.rp + this.h + this.seatWidth - this.coverFit; }
+  get coverZ0() { return coverRecess; }
   get lipHeight() { return Math.min(lipMaxHeight, this.half - 1.1); }
 
   get maxBalls(): number {
@@ -178,10 +193,10 @@ export class BallBearing implements Bearing {
       throw new Error("Balls are too small for a crown cage (the wall would be thinner than 0.6 mm)");
     }
     if (this.covers) {
-      if (this.ro - (this.rp + this.h) - seatWidth < minThickness) {
+      if (this.ro - (this.rp + this.h) - this.seatWidth < minThickness) {
         throw new Error("Outer ring wall is too thin for the dust cover seat");
       }
-      if (this.half - this.zg - seatDepth < 0.4) {
+      if (this.half - this.zg - this.seatDepth < 0.4) {
         throw new Error("Width is too small for the dust cover seat");
       }
     }
@@ -244,7 +259,7 @@ export class BallBearing implements Bearing {
     const { rp, rg, h, ro, half: H, zg } = this;
     const lo = rp + h;
     const seat = this.hasSeat(kind);
-    const s = seat ? seatWidth : 0;
+    const s = seat ? this.seatWidth : 0;
     const pts: Point[] = [newXZPoint(lo + s, 0), newXZPoint(ro, 0), newXZPoint(ro, H)];
     pts.push(...this.faceFeature(this.lipSpan(rp + rg, ro), kind));
     pts.push(newXZPoint(rp + rg, H));
@@ -256,7 +271,7 @@ export class BallBearing implements Bearing {
     pts.push(newXZPoint(lo, H - zg));
     if (seat) {
       // Counterbore seat for the dust cover
-      pts.push(newXZPoint(lo, seatDepth), newXZPoint(lo + s, seatDepth));
+      pts.push(newXZPoint(lo, this.seatDepth), newXZPoint(lo + s, this.seatDepth));
     }
     return new Polygon(pts);
   }
@@ -266,8 +281,8 @@ export class BallBearing implements Bearing {
     return new Polygon([
       newXZPoint(this.coverInner, z0),
       newXZPoint(this.coverOuter, z0),
-      newXZPoint(this.coverOuter, seatDepth),
-      newXZPoint(this.coverInner, seatDepth),
+      newXZPoint(this.coverOuter, this.seatDepth),
+      newXZPoint(this.coverInner, this.seatDepth),
     ]);
   }
 
