@@ -137,7 +137,10 @@ export class BallBearing implements Bearing {
   get cageFloor() { return this.covers ? this.seatDepth + 0.15 : 0.15; }
   get cageTop() {
     const limit = this.covers ? this.width - this.seatDepth - 0.2 : this.width - 0.3;
-    return Math.min(this.half + this.cageProngFactor * this.r, limit);
+    // The prongs must at least clear the notch neck, whatever the setting
+    const R = this.cagePocketRadius;
+    const neckTop = this.half + Math.sqrt(Math.max(0, R * R - (this.cageNeck / 2) ** 2));
+    return Math.min(Math.max(this.half + this.cageProngFactor * this.r, neckTop + 0.3), limit);
   }
   // Width of the neck above each notch (narrower than the ball: snap fit)
   get cageNeck() { return 1.8 * this.r; }
@@ -205,8 +208,16 @@ export class BallBearing implements Bearing {
         "Not enough room for the cage inside the bearing: use smaller balls, a lower cage band height, or a wider bearing"
       );
     }
-    if (this.cage && this.cageTop < this.half + 0.6 * this.r) {
-      throw new Error("Width is too small for the crown cage with dust covers; turn covers off or use a wider bearing");
+    if (this.cage) {
+      const R = this.cagePocketRadius;
+      const neckTop = this.half + Math.sqrt(Math.max(0, R * R - (this.cageNeck / 2) ** 2));
+      if (this.cageTop < neckTop + 0.2) {
+        throw new Error("Cage prong height is too low for the notch neck; increase prong height");
+      }
+      const sd = (this.rp * Math.PI) / Math.max(1, this.ballCount);
+      if (sd - R < 0.4) {
+        throw new Error("Cage prongs between the balls would be thinner than 0.8 mm; use fewer balls or a smaller notch clearance");
+      }
     }
     if (this.covers && this.coverInner >= this.coverOuter - 1) {
       throw new Error("Cover gap is too large for the cover width");
@@ -322,7 +333,9 @@ export class BallBearing implements Bearing {
     const pts: Point[] = [];
     for (let i = 0; i <= n; i++) {
       const t = (Math.PI * i) / n;
-      pts.push(newXZPoint(this.r * Math.sin(t), -this.r * Math.cos(t)));
+      // Exact zero radius at the poles, so the pole fans are clean
+      const x = i === 0 || i === n ? 0 : this.r * Math.sin(t);
+      pts.push(newXZPoint(x, -this.r * Math.cos(t)));
     }
     return new Polygon(pts);
   }
