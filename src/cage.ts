@@ -65,7 +65,7 @@ function zipper(sa: number, left: number[], sb: number, right: number[]): [V2, V
 // 2D triangulation of one sector (centred on a ball, s in [-sd, sd])
 function sectorTriangles(b: BallBearing, sd: number): [V2, V2, V2][] {
   const R = b.cagePocketRadius;
-  const H = b.half;
+  const H = b.zc; // ball centre of the row this cage holds
   const zb = b.cageBottom;
   const zt = b.cageTop;
   const nh = b.cageNeck / 2; // half width of the neck
@@ -120,7 +120,7 @@ const cache = new Map<string, Triangle[]>();
 
 export function buildCage(b: BallBearing): Triangle[] {
   const key = JSON.stringify([
-    b.rp, b.r, b.h, b.half, b.cageWidth, b.cageBottom, b.cageTop,
+    b.rp, b.r, b.h, b.zc, b.cageWidth, b.cageBottom, b.cageTop,
     b.cagePocketRadius, b.cageNeck, b.ballCount,
   ]);
   const hit = cache.get(key);

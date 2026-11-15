@@ -30,7 +30,9 @@ export interface BallBearingParams {
   width: number;
   ballDiameter: number;
   clearance: number;
-  ballCount: number; // 0 = automatic
+  ballCount: number; // 0 = automatic (per row)
+  rows: number; // 1 = single row, 2 = double row (two ball tracks side by side)
+  rowSpacing: number; // axial distance between the two ball rows, 0 = automatic
   cage: boolean; // design: use a crown cage
   covers: boolean; // design: use dust covers
   landFactor: number; // ring shoulder height from the pitch circle, in ball radii
@@ -83,6 +85,8 @@ export class BallBearing implements Bearing {
   ballDiameter: number;
   clearance: number;
   ballCountSetting: number;
+  rows: number;
+  rowSpacingSetting: number;
   cage: boolean;
   covers: boolean;
   landFactor: number;
@@ -108,6 +112,8 @@ export class BallBearing implements Bearing {
     this.ballDiameter = p.ballDiameter;
     this.clearance = p.clearance;
     this.ballCountSetting = p.ballCount;
+    this.rows = p.rows === 2 ? 2 : 1;
+    this.rowSpacingSetting = p.rowSpacing;
     this.lipFit = p.lipFit;
     this.cageClearance = p.cageClearance;
     this.cageWallClearance = p.cageWallClearance;
@@ -142,6 +148,18 @@ export class BallBearing implements Bearing {
     return Math.max(base, Math.min(need, 0.85 * this.r));
   }
   get half() { return this.width / 2; }
+  // Double row: axial distance between the ball centres of the two rows. By
+  // default each row sits in the middle of its half of the width.
+  get rowPitch() {
+    if (this.rows !== 2) return 0;
+    return this.rowSpacingSetting > 0 ? this.rowSpacingSetting : this.half;
+  }
+  // Ball centre of the lower (or only) row; the cage is built around this row
+  get zc() { return this.half - this.rowPitch / 2; }
+  // Ball centre of every row, symmetric about mid-width
+  get rowCentres(): number[] {
+    return this.rows === 2 ? [this.zc, this.width - this.zc] : [this.half];
+  }
   // Axial half-extent of the groove on the land
   get zg() { return Math.sqrt(Math.max(0, this.rg * this.rg - this.h * this.h)); }
   // Crown cage geometry
@@ -151,18 +169,21 @@ export class BallBearing implements Bearing {
   // solid band lies directly under the balls (between the balls and the lower
   // face / lower cover) and the thin wall runs up between the balls.
   get cageBand() { return this.cageBandHeight; }
-  get cageBottom() { return this.half - this.cagePocketRadius - this.cageBand; }
+  get cageBottom() { return this.zc - this.cagePocketRadius - this.cageBand; }
   // Lowest z the cage may reach: the lower face, or the lower cover when fitted
   // Cover geometry (axial thickness, radial seat width, seat depth)
   get seatWidth() { return this.coverSeatWidth; }
   get seatDepth() { return this.coverThickness + coverRecess; }
   get cageFloor() { return this.covers ? this.seatDepth + 0.15 : 0.15; }
   get cageTop() {
-    const limit = this.covers ? this.width - this.seatDepth - 0.2 : this.width - 0.3;
+    // Double row: the upper row's cage is a mirrored copy, so the prongs of
+    // both cages must stay short of mid-width
+    const limit = this.rows === 2 ? this.half - 0.15
+      : this.covers ? this.width - this.seatDepth - 0.2 : this.width - 0.3;
     // The prongs must at least clear the notch neck, whatever the setting
     const R = this.cagePocketRadius;
-    const neckTop = this.half + Math.sqrt(Math.max(0, R * R - (this.cageNeck / 2) ** 2));
-    return Math.min(Math.max(this.half + this.cageProngFactor * this.r, neckTop + 0.3), limit);
+    const neckTop = this.zc + Math.sqrt(Math.max(0, R * R - (this.cageNeck / 2) ** 2));
+    return Math.min(Math.max(this.zc + this.cageProngFactor * this.r, neckTop + 0.3), limit);
   }
   // Width of the neck above each notch (narrower than the ball: snap fit)
   get cageNeck() { return 1.8 * this.r; }
@@ -232,10 +253,10 @@ export class BallBearing implements Bearing {
   }
 
   summary(): string {
-    return `${this.ballCount} × Ø${this.ballDiameter.toFixed(3).replace(/\.?0+$/, "")} mm balls` +
+    return (this.rows === 2 ? "Double row: 2 × " : "") + `${this.ballCount} × Ø${this.ballDiameter.toFixed(3).replace(/\.?0+$/, "")} mm balls` +
       (this.include.balls ? " (printed)" : " (steel/glass, bought)") +
-      (this.cage ? " + crown cage" : "") + (this.covers ? " + 2 dust covers" : "") +
-      ` | max balls: ${this.circumferenceLimit} around the circle` +
+      (this.cage ? (this.rows === 2 ? " + 2 crown cages" : " + crown cage") : "") + (this.covers ? " + 2 dust covers" : "") +
+      ` | max balls${this.rows === 2 ? " per row" : ""}: ${this.circumferenceLimit} around the circle` +
       (this.loadLimit === null ? "" : `, ${this.loadLimit} loadable (Conrad)`) +
       ` | rings: inner ${this.splitInner ? "2 halves" : "1 piece"}, outer ${this.splitOuter ? "2 halves" : "1 piece"}`;
   }
@@ -262,7 +283,21 @@ export class BallBearing implements Bearing {
     }
     const lowerExtent = this.zg;
     const upperExtent = this.splitInner && this.splitOuter ? this.zg : this.zgUp;
-    if (this.half - Math.max(lowerExtent, upperExtent) < minLand) {
+    // Land between each face and the nearest groove edge
+    let faceLand = this.half - Math.max(lowerExtent, upperExtent);
+    if (this.rows === 2) {
+      if (this.splitInner || this.splitOuter) {
+        throw new Error("Double-row bearings use one-piece rings: untick the split ring options");
+      }
+      const [z1, z2] = this.rowCentres;
+      faceLand = Math.min(z1 - lowerExtent, this.width - (z2 + upperExtent));
+      if (faceLand < minLand) {
+        throw new Error("Width is too small for two rows of this ball size (use smaller balls or a smaller row spacing)");
+      }
+      if (z2 - lowerExtent - (z1 + upperExtent) < 0.4) {
+        throw new Error("The two ball rows are too close: raise the row spacing or use smaller balls");
+      }
+    } else if (faceLand < minLand) {
       throw new Error("Width is too small for this ball size");
     }
     if (!(this.landFactor >= 0.4 && this.landFactor <= 0.9)) {
@@ -275,7 +310,7 @@ export class BallBearing implements Bearing {
       if (this.ro - (this.rp + this.h) - this.seatWidth < minThickness) {
         throw new Error("Outer ring wall is too thin for the dust cover seat");
       }
-      if (this.half - Math.max(this.zg, upperExtent) - this.seatDepth < 0.4) {
+      if (faceLand - this.seatDepth < 0.4) {
         throw new Error("Width is too small for the dust cover seat");
       }
     }
@@ -286,9 +321,11 @@ export class BallBearing implements Bearing {
     }
     if (this.cage) {
       const R = this.cagePocketRadius;
-      const neckTop = this.half + Math.sqrt(Math.max(0, R * R - (this.cageNeck / 2) ** 2));
+      const neckTop = this.zc + Math.sqrt(Math.max(0, R * R - (this.cageNeck / 2) ** 2));
       if (this.cageTop < neckTop + 0.2) {
-        throw new Error("Cage prong height is too low for the notch neck; increase prong height");
+        throw new Error(this.rows === 2
+          ? "The two cages would collide: raise the row spacing or use smaller balls"
+          : "Cage prong height is too low for the notch neck; increase prong height");
       }
       const sd = (this.rp * Math.PI) / Math.max(1, this.ballCount);
       if (sd - R < 0.4) {
@@ -417,8 +454,8 @@ export class BallBearing implements Bearing {
   // distance from the pitch circle towards the ring material. The upper side
   // (printed as an overhang) is limited to 45 degrees: where the circle would
   // get steeper it continues as a straight 45 degree chamfer to the shoulder.
-  grooveWhole(): { u: number; z: number }[] {
-    const { rg, h, half: H } = this;
+  grooveWhole(H = this.zc): { u: number; z: number }[] {
+    const { rg, h } = this;
     const a = Math.acos(Math.min(1, h / rg)); // angle where the groove meets the shoulder
     const lim = Math.PI / 4;
     const pts: { u: number; z: number }[] = [];
@@ -446,7 +483,13 @@ export class BallBearing implements Bearing {
   // How far the one-piece groove reaches above / below mid-width at the shoulder
   get zgUp() {
     const g = this.grooveWhole();
-    return g[g.length - 1].z - this.half;
+    return g[g.length - 1].z - this.zc;
+  }
+
+  // Groove profiles of all rows, ascending z. Between two grooves the profile
+  // runs straight along the shoulder (u = h), which closes the middle land.
+  grooves(): { u: number; z: number }[] {
+    return this.rowCentres.flatMap((zc) => this.grooveWhole(zc));
   }
 
   // One-piece outer ring, z = 0 is the bed face
@@ -456,7 +499,7 @@ export class BallBearing implements Bearing {
     const seat = this.covers;
     const s = seat ? this.seatWidth : 0;
     const sd = this.seatDepth;
-    const g = this.grooveWhole();
+    const g = this.grooves();
     const pts: Point[] = [newXZPoint(lo + s, 0), newXZPoint(ro, 0), newXZPoint(ro, W), newXZPoint(lo + s, W)];
     if (seat) pts.push(newXZPoint(lo + s, W - sd), newXZPoint(lo, W - sd));
     for (let i = g.length - 1; i >= 0; i--) pts.push(newXZPoint(rp + g[i].u, g[i].z));
@@ -468,7 +511,7 @@ export class BallBearing implements Bearing {
   innerWholePolygon(): Polygon {
     const { rp, ri, h, width: W } = this;
     const li = rp - h;
-    const g = this.grooveWhole();
+    const g = this.grooves();
     const pts: Point[] = [newXZPoint(ri, 0), newXZPoint(li, 0)];
     for (const p of g) pts.push(newXZPoint(rp - p.u, p.z));
     pts.push(newXZPoint(li, W), newXZPoint(ri, W));
@@ -571,8 +614,15 @@ export class BallBearing implements Bearing {
     }
     // Crown cage: one solid part, printed with the band down
     if (this.cage && inc.cage) {
-      ry = row(this.rp + this.cageWidth / 2);
-      tris.push(...shift(this.cageTriangles(), 0, ry, -this.cageBottom));
+      const cr = this.rp + this.cageWidth / 2;
+      ry = row(cr);
+      if (this.rows === 2) {
+        // Both rows use the same cage; print two identical copies
+        tris.push(...shift(this.cageTriangles(), -(cr + plateGap / 2), ry, -this.cageBottom));
+        tris.push(...shift(this.cageTriangles(), cr + plateGap / 2, ry, -this.cageBottom));
+      } else {
+        tris.push(...shift(this.cageTriangles(), 0, ry, -this.cageBottom));
+      }
     }
     // Dust covers
     if (this.covers && inc.covers) {
@@ -586,7 +636,7 @@ export class BallBearing implements Bearing {
       const pitch = this.ballDiameter + 2;
       const cols = Math.max(1, Math.floor((2 * ro + plateGap) / pitch));
       ry = row(this.r);
-      const n = this.ballCount;
+      const n = this.ballCount * this.rows;
       for (let i = 0; i < n; i++) {
         const col = i % cols;
         const rw = Math.floor(i / cols);
@@ -609,20 +659,33 @@ export class BallBearing implements Bearing {
     const ballPoly = this.ballPolygon();
     // One ball mesh, rotated copies per angle
     const base = this.placed(ballPoly, 0, 0, 0);
-    for (let i = 0; i < n; i++) {
-      const ang = (2 * Math.PI * i) / n;
-      const cs = Math.cos(ang), sn = Math.sin(ang);
-      const rot = (p: Point) =>
-        new Point({
-          x: (p.x + this.rp) * cs - p.y * sn,
-          y: (p.x + this.rp) * sn + p.y * cs,
-          z: p.z + this.width / 2,
-        });
-      for (const t of base) {
-        balls.push(new Triangle({ a: rot(t.a), b: rot(t.b), c: rot(t.c) }));
+    this.rowCentres.forEach((zc, row) => {
+      for (let i = 0; i < n; i++) {
+        // The second row is turned by half a ball pitch, so it shows between the first
+        const ang = (2 * Math.PI * (i + row / 2)) / n;
+        const cs = Math.cos(ang), sn = Math.sin(ang);
+        const rot = (p: Point) =>
+          new Point({
+            x: (p.x + this.rp) * cs - p.y * sn,
+            y: (p.x + this.rp) * sn + p.y * cs,
+            z: p.z + zc,
+          });
+        for (const t of base) {
+          balls.push(new Triangle({ a: rot(t.a), b: rot(t.b), c: rot(t.c) }));
+        }
+      }
+    });
+    const cage = this.cage ? shift(this.cageTriangles(), 0, 0, -explode * 1.1) : [];
+    if (this.cage && this.rows === 2) {
+      // Upper row: the same cage mirrored about mid-width (turned to match its balls)
+      const turn = Math.PI / n;
+      const cs = Math.cos(turn), sn = Math.sin(turn);
+      const mv = (p: Point) =>
+        new Point({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs, z: this.width - p.z + explode * 1.1 });
+      for (const t of this.cageTriangles()) {
+        cage.push(new Triangle({ a: mv(t.a), b: mv(t.c), c: mv(t.b) }));
       }
     }
-    const cage = this.cage ? shift(this.cageTriangles(), 0, 0, -explode * 1.1) : [];
     const covers: Triangle[] = [];
     if (this.covers) {
       covers.push(...this.placed(this.coverPolygon(), 0, 0, -explode * 1.6));
@@ -688,17 +751,19 @@ export class BallBearing implements Bearing {
         ctx.fill();
         ctx.stroke();
       });
-      // Ball
-      const cx = tx(mirror ? -this.rp : this.rp);
-      const cy = ty(W / 2);
-      const rad = this.r * scale;
-      const bg = ctx.createRadialGradient(cx - rad / 3, cy - rad / 3, rad / 8, cx, cy, rad);
-      bg.addColorStop(0, "#fafafa");
-      bg.addColorStop(1, "#6f7a85");
-      ctx.fillStyle = bg;
-      ctx.beginPath();
-      ctx.arc(cx, cy, rad, 0, 2 * Math.PI);
-      ctx.fill();
+      // Balls, one per row
+      for (const zc of this.rowCentres) {
+        const cx = tx(mirror ? -this.rp : this.rp);
+        const cy = ty(zc);
+        const rad = this.r * scale;
+        const bg = ctx.createRadialGradient(cx - rad / 3, cy - rad / 3, rad / 8, cx, cy, rad);
+        bg.addColorStop(0, "#fafafa");
+        bg.addColorStop(1, "#6f7a85");
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, 2 * Math.PI);
+        ctx.fill();
+      }
     };
     draw(false);
     draw(true);
@@ -706,6 +771,7 @@ export class BallBearing implements Bearing {
 
   get fileName(): string {
     const f = (n: number) => n.toFixed(2).replace(/\.?0*$/, "");
-    return `bearing-balls-${f(this.boreDiameter)}-${f(this.outerDiameter)}-${f(this.width)}-ball${f(this.ballDiameter)}.stl`;
+    const rows = this.rows === 2 ? "-2row" : "";
+    return `bearing-balls-${f(this.boreDiameter)}-${f(this.outerDiameter)}-${f(this.width)}${rows}-ball${f(this.ballDiameter)}.stl`;
   }
 }

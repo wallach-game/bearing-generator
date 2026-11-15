@@ -6,7 +6,9 @@ export interface Config {
   outer: number;
   width: number;
   ball: number;
-  count: number; // 0 = automatic
+  count: number; // 0 = automatic (per row)
+  rows: number; // 1 = single row, 2 = double row
+  rowSpacing: number; // axial distance between the rows, 0 = automatic
   clearance: number; // ball groove, per side
   lipFit: number;
   landFactor: number; // ring shoulder height, in ball radii
@@ -36,6 +38,8 @@ export const defaultConfig: Config = {
   width: 7,
   ball: 4,
   count: 0,
+  rows: 1,
+  rowSpacing: 0,
   clearance: 0.15,
   lipFit: 0.1,
   landFactor: 0.75,
@@ -60,7 +64,7 @@ export const defaultConfig: Config = {
 };
 
 const numKeys: (keyof Config)[] = [
-  "bore", "outer", "width", "ball", "count", "clearance", "lipFit",
+  "bore", "outer", "width", "ball", "count", "rows", "rowSpacing", "clearance", "lipFit",
   "landFactor", "cageClearance", "cageWall", "cageThick", "cageBand", "cageProng", "coverThick", "coverSeat", "coverFit", "coverGap",
 ];
 const boolKeys: (keyof Config)[] = [
@@ -116,8 +120,8 @@ export function configCaption(c: Config): string[] {
   if (c.cage) parts.push("cage");
   if (c.covers) parts.push("covers");
   return [
-    `Ball bearing ${f(c.bore)} x ${f(c.outer)} x ${f(c.width)} mm`,
-    `Balls: ${f(c.ball)} mm${c.count ? " x" + c.count : ""}   Groove clearance ${f(c.clearance)}`,
+    `${c.rows === 2 ? "Double-row ball" : "Ball"} bearing ${f(c.bore)} x ${f(c.outer)} x ${f(c.width)} mm`,
+    `Balls: ${f(c.ball)} mm${c.count ? " x" + c.count : ""}${c.rows === 2 ? " per row" + (c.rowSpacing ? ", rows " + f(c.rowSpacing) + " apart" : "") : ""}   Groove clearance ${f(c.clearance)}`,
     `Rings: inner ${c.splitInner ? "split" : "1 piece"}, outer ${c.splitOuter ? "split" : "1 piece"}, shoulder ${f(c.landFactor)}r`,
     `Lip fit ${f(c.lipFit)}   Design: ${parts.length ? parts.join(" + ") : "rings + balls"}`,
     ...(c.cage ? [`Cage: notch +${f(c.cageClearance)}, wall gap ${f(c.cageWall)}, wall ${f(c.cageThick)}, band ${f(c.cageBand)}, prongs ${f(c.cageProng)}r`] : []),
