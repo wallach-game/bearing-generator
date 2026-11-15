@@ -77,6 +77,8 @@ export function readConfig(): Config {
     width: num("#width"),
     ball: ballDiameterFromForm(),
     count: Math.round(num("#ball-count")) || 0,
+    rows: el<HTMLSelectElement>("#rows").value === "2" ? 2 : 1,
+    rowSpacing: num("#row-spacing"),
     clearance: num("#clearance"),
     lipFit: num("#lip-fit"),
     landFactor: num("#land-factor"),
@@ -108,6 +110,8 @@ export function writeConfig(c: Config) {
   set("#outer-diameter", c.outer);
   set("#width", c.width);
   set("#ball-count", c.count);
+  el<HTMLSelectElement>("#rows").value = c.rows === 2 ? "2" : "1";
+  set("#row-spacing", c.rowSpacing);
   set("#clearance", c.clearance);
   set("#lip-fit", c.lipFit);
   set("#land-factor", c.landFactor);
@@ -150,6 +154,8 @@ export function bearingParamsFor(c: Config): BallBearingParams {
     ballDiameter: c.ball,
     clearance: c.clearance,
     ballCount: c.count,
+    rows: c.rows,
+    rowSpacing: c.rowSpacing,
     cage: c.cage,
     covers: c.covers,
     landFactor: c.landFactor,

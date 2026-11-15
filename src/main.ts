@@ -7,35 +7,42 @@ import {
 } from "./generate";
 import { BallBearing } from "./bearing-ball";
 import { bearingParamsFor } from "./generate";
-import { configToLink, defaultConfig, parseConfig } from "./config";
+import { Config, configToLink, defaultConfig, parseConfig } from "./config";
 import { decodeQrFromFile, downloadCanvas, printCanvas, renderLabel } from "./codes";
 import "./style.css";
 
-// Common bearing sizes: [name, bore, outer diameter, width] in mm
-const standardSizes: [string, number, number, number][] = [
-  ["603", 3, 9, 5],
-  ["623", 3, 10, 4],
-  ["624", 4, 13, 5],
-  ["625", 5, 16, 5],
-  ["626", 6, 19, 6],
-  ["627", 7, 22, 7],
-  ["608", 8, 22, 7],
-  ["609", 9, 24, 7],
-  ["6000", 10, 26, 8],
-  ["6001", 12, 28, 8],
-  ["6002", 15, 32, 9],
-  ["6003", 17, 35, 10],
-  ["6200", 10, 30, 9],
-  ["6201", 12, 32, 10],
-  ["6202", 15, 35, 11],
-  ["6203", 17, 40, 12],
-  ["6204", 20, 47, 14],
-  ["6205", 25, 52, 15],
-  ["6900", 10, 22, 6],
-  ["6901", 12, 24, 6],
-  ["6902", 15, 28, 7],
-  ["6903", 17, 30, 7],
-  ["6904", 20, 37, 9],
+// Common bearing sizes: [name, bore, outer diameter, width, ball rows] in mm
+const standardSizes: [string, number, number, number, number][] = [
+  ["603", 3, 9, 5, 1],
+  ["623", 3, 10, 4, 1],
+  ["624", 4, 13, 5, 1],
+  ["625", 5, 16, 5, 1],
+  ["626", 6, 19, 6, 1],
+  ["627", 7, 22, 7, 1],
+  ["608", 8, 22, 7, 1],
+  ["609", 9, 24, 7, 1],
+  ["6000", 10, 26, 8, 1],
+  ["6001", 12, 28, 8, 1],
+  ["6002", 15, 32, 9, 1],
+  ["6003", 17, 35, 10, 1],
+  ["6200", 10, 30, 9, 1],
+  ["6201", 12, 32, 10, 1],
+  ["6202", 15, 35, 11, 1],
+  ["6203", 17, 40, 12, 1],
+  ["6204", 20, 47, 14, 1],
+  ["6205", 25, 52, 15, 1],
+  ["6900", 10, 22, 6, 1],
+  ["6901", 12, 24, 6, 1],
+  ["6902", 15, 28, 7, 1],
+  ["6903", 17, 30, 7, 1],
+  ["6904", 20, 37, 9, 1],
+  // Double-row deep-groove (42xx)
+  ["4200", 10, 30, 14, 2],
+  ["4201", 12, 32, 14, 2],
+  ["4202", 15, 35, 14, 2],
+  ["4203", 17, 40, 16, 2],
+  ["4204", 20, 47, 18, 2],
+  ["4205", 25, 52, 18, 2],
 ];
 
 // Common ball sizes in mm (label, diameter)
@@ -57,7 +64,7 @@ const ballSizes: [string, number][] = [
 ];
 
 const sizeOptions = standardSizes
-  .map(([n, d, o, w]) => `<option value="${n}">${n} (${d}×${o}×${w})</option>`)
+  .map(([n, d, o, w, rows]) => `<option value="${n}">${n} (${d}×${o}×${w}${rows === 2 ? ", double row" : ""})</option>`)
   .join("");
 const ballOptions = ballSizes
   .map(([l, d]) => `<option value="${d}"${d === 4 ? " selected" : ""}>${l}</option>`)
@@ -92,14 +99,16 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
       ${field("width", "Width (mm)", d.width, 0.1, 4, 1000)}
       ${row("Ball diameter", `<select id="ball-select">${ballOptions}<option value="custom">Custom…</option></select>`, "ball-select")}
       ${row("Custom ball diameter (mm)", `<input type="number" id="ball-custom" value="4" step="0.001" min="1" max="50" disabled>`, "ball-custom")}
-      ${field("ball-count", "Number of balls (0 = max)", d.count, 1, 0, 100)}
+      ${field("ball-count", "Number of balls per row (0 = max)", d.count, 1, 0, 100)}
+      ${row("Ball rows", `<select id="rows"><option value="1">1 (single row)</option><option value="2">2 (double row)</option></select>`, "rows")}
+      ${field("row-spacing", "Row spacing (mm, 0 = auto)", d.rowSpacing, 0.1, 0, 1000)}
     </table>
 
     <details id="size-table-box">
       <summary>Table of standard sizes (click a row to use it)</summary>
       <table id="size-table">
         <thead>
-          <tr><th>Size</th><th>Bore</th><th>Outer Ø</th><th>Width</th><th>Pitch Ø</th><th>Max ball Ø</th><th>Suggested ball</th><th>Max balls</th></tr>
+          <tr><th>Size</th><th>Rows</th><th>Bore</th><th>Outer Ø</th><th>Width</th><th>Pitch Ø</th><th>Max ball Ø</th><th>Suggested ball</th><th>Max balls</th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -200,6 +209,7 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
         <li>Print all parts as laid out on the plate. The upper side of each ring groove is limited to a 45&deg; slope, so no supports are needed.</li>
         <li><strong>Conrad loading</strong> (both rings one piece): put the inner ring inside the outer ring and push it against one side, so a crescent-shaped gap opens on the opposite side. Drop the balls into the crescent, centre the rings, spread the balls out evenly, then snap the crown cage on from the lower face.</li>
         <li><strong>Maximum number of balls:</strong> the crescent limits how many balls can be loaded this way. With shoulder radii R<sub>o</sub> (outer) and R<sub>i</sub> (inner), the inner ring is pushed over by e = R<sub>o</sub> &minus; R<sub>i</sub>. Balls of radius r rest on the outer shoulder at R<sub>c</sub> = R<sub>o</sub> &minus; r, neighbours touching (2&middot;asin(r/R<sub>c</sub>) apart), and a ball fits where R<sub>c</sub>&sup2; + e&sup2; + 2R<sub>c</sub>e&middot;cos&alpha; &ge; (R<sub>i</sub> + r)&sup2; (&alpha; measured from the widest point). The count is the most balls that fit that way; it is shown above next to the limit for the full circle, Z = &lfloor;&pi; / asin((D<sub>w</sub> + gap) / D<sub>pw</sub>)&rfloor;, and the smaller of the two is used. A higher ring shoulder opens a wider crescent and allows more balls, at the cost of a shallower groove.</li>
+        <li><strong>Double row</strong> (42xx sizes, or set "Ball rows" to 2): both rings get two grooves side by side, each row has its own balls and its own crown cage. Load both rows at once with the Conrad method: push the inner ring to one side and drop the balls for both rows into the crescent, which runs across the full width. Centre the rings, spread both rows out evenly, then snap one cage on from each face. The two cages are identical. Split rings are not available for double-row bearings.</li>
         <li>If you split a ring into halves, any number of balls fits. Each pair of halves aligns with a small lip and recess; secure them with a drop of CA glue.</li>
         <li>The crown cage is a single solid piece (not split): with one-piece rings it snaps over the balls from the lower face once they are spread evenly.
             Like in a real bearing it sits entirely inside the bearing width (band under the balls); that needs balls clearly smaller than the bearing width. The wall thickness, band height and prong height are adjustable; the cage also reduces the maximum ball count.</li>
@@ -226,7 +236,7 @@ function constrainField(id: string) {
 }
 
 const numericIds = [
-  "#outer-diameter", "#bore-diameter", "#width", "#clearance", "#ball-custom", "#ball-count",
+  "#outer-diameter", "#bore-diameter", "#width", "#clearance", "#ball-custom", "#ball-count", "#row-spacing",
   "#lip-fit", "#land-factor", "#cage-clearance", "#cage-wall", "#cover-fit", "#cover-gap", "#cover-thick", "#cover-seat", "#cage-thick", "#cage-band", "#cage-prong",
 ];
 
@@ -247,28 +257,50 @@ function refresh() {
   ballCustom.disabled = ballSelect.value !== "custom";
   $<HTMLInputElement>("#inc-cage").disabled = !$<HTMLInputElement>("#cage").checked;
   $<HTMLInputElement>("#inc-covers").disabled = !$<HTMLInputElement>("#covers").checked;
+  // Double row: one-piece rings only, and the spacing only applies there
+  const twoRow = $<HTMLSelectElement>("#rows").value === "2";
+  $<HTMLInputElement>("#row-spacing").disabled = !twoRow;
+  $<HTMLInputElement>("#split-inner").disabled = twoRow;
+  $<HTMLInputElement>("#split-outer").disabled = twoRow;
+  if (twoRow) {
+    $<HTMLInputElement>("#split-inner").checked = false;
+    $<HTMLInputElement>("#split-outer").checked = false;
+  }
   validate();
   generatePreview();
   scheduleLabel();
   fillSizeTable();
 }
 
-// Largest ball (mm) that fits the given dimensions, limited by wall thickness and width
-function maxBallFor(bore: number, outer: number, width: number, clearance: number): number {
-  const widthLimit = (width / 2 - 0.9) * 2 * 0.95;
+// Largest ball (mm) that fits the given dimensions, limited by wall thickness
+// and width (a double row shares the width between two rows)
+function maxBallFor(bore: number, outer: number, width: number, clearance: number, rows = 1): number {
+  const widthLimit = (width / (2 * rows) - 0.9) * 2 * 0.95;
   return Math.min(BallBearing.maxBallDiameter(bore, outer, clearance), widthLimit);
 }
 
-// Largest standard ball that fits
-function pickBall(max: number): number {
+// Largest standard ball that fits and gives a valid bearing with the current
+// design settings (cage, covers, ...); falls back to the size limit alone
+function pickBall(max: number, c?: Config): number {
   let pick = ballSizes[0][1];
   for (const [, dia] of ballSizes) if (dia <= max) pick = dia;
+  if (!c) return pick;
+  for (let i = ballSizes.length - 1; i >= 0; i--) {
+    const dia = ballSizes[i][1];
+    if (dia > max) continue;
+    try {
+      new BallBearing({ ...bearingParamsFor(c), ballDiameter: dia, ballCount: 0 }).validate();
+      return dia;
+    } catch {
+      // too large for this design, try the next smaller ball
+    }
+  }
   return pick;
 }
 
 function suggestBall() {
   const c = readConfig();
-  ballSelect.value = String(pickBall(maxBallFor(c.bore, c.outer, c.width, c.clearance)));
+  ballSelect.value = String(pickBall(maxBallFor(c.bore, c.outer, c.width, c.clearance, c.rows), c));
 }
 
 // Fill the size table; ball count is the maximum with the current cage setting
@@ -277,17 +309,17 @@ function fillSizeTable() {
   const body = $<HTMLTableSectionElement>("#size-table tbody");
   const f = (n: number) => String(Math.round(n * 100) / 100);
   body.innerHTML = standardSizes
-    .map(([name, bore, outer, width]) => {
-      const max = maxBallFor(bore, outer, width, c.clearance);
-      const ball = pickBall(max);
-      const balls = new BallBearing({
-        ...bearingParamsFor(c), boreDiameter: bore, outerDiameter: outer, width, ballDiameter: ball, ballCount: 0,
-      }).maxBalls;
-      const selected = c.bore === bore && c.outer === outer && c.width === width;
+    .map(([name, bore, outer, width, rows]) => {
+      const max = maxBallFor(bore, outer, width, c.clearance, rows);
+      const sc: Config = { ...c, bore, outer, width, rows, rowSpacing: rows === c.rows ? c.rowSpacing : 0 };
+      if (rows === 2) { sc.splitInner = false; sc.splitOuter = false; }
+      const ball = pickBall(max, sc);
+      const balls = new BallBearing({ ...bearingParamsFor(sc), ballDiameter: ball, ballCount: 0 }).maxBalls;
+      const selected = c.bore === bore && c.outer === outer && c.width === width && c.rows === rows;
       return `<tr data-size="${name}" style="cursor:pointer${selected ? ";font-weight:bold" : ""}">
-        <td>${name}</td><td>${bore}</td><td>${outer}</td><td>${width}</td>
+        <td>${name}</td><td>${rows}</td><td>${bore}</td><td>${outer}</td><td>${width}</td>
         <td>${f((bore + outer) / 2)}</td><td>${max > 0 ? f(max) : "–"}</td>
-        <td>${max >= ballSizes[0][1] ? ball : "–"}</td><td>${max >= ballSizes[0][1] ? balls : "–"}</td></tr>`;
+        <td>${max >= ballSizes[0][1] ? ball : "–"}</td><td>${max >= ballSizes[0][1] ? (rows === 2 ? `2 × ${balls}` : balls) : "–"}</td></tr>`;
     })
     .join("");
 }
@@ -301,7 +333,7 @@ $<HTMLTableSectionElement>("#size-table tbody").addEventListener("click", (e) =>
 // Make the size picker show a matching standard size, or "Custom"
 function syncSizeSelect() {
   const c = readConfig();
-  const m = standardSizes.find(([, b, o, w]) => b === c.bore && o === c.outer && w === c.width);
+  const m = standardSizes.find(([, b, o, w, rows]) => b === c.bore && o === c.outer && w === c.width && rows === c.rows);
   sizeSelect.value = m ? m[0] : "custom";
 }
 
@@ -311,6 +343,12 @@ sizeSelect.addEventListener("change", () => {
     $<HTMLInputElement>("#bore-diameter").value = String(entry[1]);
     $<HTMLInputElement>("#outer-diameter").value = String(entry[2]);
     $<HTMLInputElement>("#width").value = String(entry[3]);
+    $<HTMLSelectElement>("#rows").value = String(entry[4]);
+    $<HTMLInputElement>("#row-spacing").value = "0";
+    if (entry[4] === 2) {
+      $<HTMLInputElement>("#split-inner").checked = false;
+      $<HTMLInputElement>("#split-outer").checked = false;
+    }
     suggestBall();
   }
   refresh();
@@ -322,6 +360,8 @@ sizeSelect.addEventListener("change", () => {
     sizeSelect.value = "custom";
   })
 );
+// Changing the number of rows keeps a standard size only if one matches
+$<HTMLSelectElement>("#rows").addEventListener("change", syncSizeSelect);
 
 // Live update: while typing (debounced), and immediately on change/blur
 let liveTimer: number | undefined;
